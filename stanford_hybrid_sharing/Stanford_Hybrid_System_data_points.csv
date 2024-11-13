@@ -1,0 +1,16 @@
+points,keys,factor,offset,units
+schedule_input,schedule_input,1,0,1
+mpc_enable,mpc_enable,1,0,1
+outdoor_air_temperature,outdoor_air_temperature,1,0,deg-K
+soc_cold_pcm,soc_cold_pcm,1,0,1
+soc_hot_pcm,soc_hot_pcm,1,0,1
+room_temperature,room_temperature,1,0,deg-K
+pump_1_electric_power,pump_1_electric_power,1,0,Watt
+pump_2_electric_power,pump_2_electric_power,1,0,Watt
+heat_pump_mode,heat_pump_mode,1,0,1
+heat_pump_on_off,heat_pump_on_off,1,0,1
+heat_pump_electric_power,heat_pump_electric_power,1,0,Watt
+heat_pump_useful_thermal_power,heat_pump_useful_thermal_power,1,0,Watt
+fan_coil_fan_electric_power,fan_coil_fan_electric_power,1,0,Watt
+temp_cold_pcm,temp_cold_pcm,1,0,deg-K
+temp_hot_pcm,temp_hot_pcm,1,0,deg-K

@@ -1,0 +1,641 @@
+/*<meta />*/
+
+@namespace MadCap url(http://www.madcapsoftware.com/Schemas/MadCap.xsd);
+
+/*<meta sourceDocument="C:\Users\Andyt1\Documents\climate Analytics Help.docx" />*/
+
+p
+{
+	font-family: Calibri;
+	font-size: 11pt;
+	margin-top: 0pt;
+	margin-bottom: 0pt;
+}
+
+ol
+{
+	font-family: Calibri;
+	font-size: 11pt;
+	margin-top: 0pt;
+	margin-bottom: 0pt;
+}
+
+ul
+{
+	font-family: Calibri;
+	font-size: 11pt;
+	margin-top: 0pt;
+	margin-bottom: 0pt;
+}
+
+li
+{
+	font-family: Calibri;
+	font-size: 11pt;
+	margin-top: 0pt;
+	margin-bottom: 0pt;
+}
+
+td
+{
+	font-family: Calibri;
+	font-size: 11pt;
+	vertical-align: top;
+}
+
+p.Title
+{
+	font-family: 'Calibri Light';
+	letter-spacing: -1pt;
+	font-size: 28pt;
+}
+
+h1.Heading1
+{
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	mc-heading-level: 1;
+	margin-top: 12pt;
+	margin-bottom: 12pt;
+	background-repeat: no-repeat;
+	border-radius: 5px;
+	border-bottom-left-radius: 0px;
+	border-bottom-right-radius: 0px 0px;
+	font-family: Arial;
+	font-size: 20pt;
+	color: #000000;
+	font-weight: bold;
+	padding-bottom: 14px;
+	padding-top: 18px;
+}
+
+p.ListParagraph
+{
+	font-size: 11pt;
+	font-family: Calibri;
+}
+
+li.ListParagraph
+{
+	font-size: 11pt;
+	font-family: Calibri;
+}
+
+img.img_1
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 603px;
+	height: 236px;
+	background-image: url('Resources/Images/Bulb On 24 n p.png');
+}
+
+span.span_1
+{
+	font-style: italic;
+}
+
+ul.ul_1
+{
+	padding-left: 0px;
+	list-style-type: disc;
+	margin-left: 36pt;
+}
+
+h2.Heading2
+{
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	margin-bottom: 6pt;
+	mc-heading-level: 2;
+	margin-top: 14pt;
+	color: #000000;
+	font-family: Arial;
+	font-size: 16pt;
+	font-weight: Bold;
+	padding-bottom: 12px;
+	padding-top: 16px;
+}
+
+p.ListParagraph_1
+{
+	font-size: 11pt;
+	margin-left: 36pt;
+	font-family: Calibri;
+}
+
+span.span_2
+{
+	font-weight: bold;
+}
+
+img.img_2
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 526px;
+	height: 147px;
+}
+
+h3.Heading3
+{
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	margin-top: 12pt;
+	margin-bottom: 6pt;
+	mc-heading-level: 3;
+	padding-top: 14px;
+	color: #000000;
+	font-family: Arial;
+	font-weight: Bold;
+	font-size: 13pt;
+	padding-bottom: 8px;
+}
+
+a.Hyperlink
+{
+	color: #0563C1;
+	text-decoration: underline;
+}
+
+a.Hyperlink_1
+{
+	color: #0563C1;
+	text-decoration: underline;
+	font-weight: bold;
+}
+
+p.p_1
+{
+	font-weight: bold;
+}
+
+img.img_3
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 282px;
+	height: 136px;
+}
+
+img.img_4
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 294px;
+	height: 144px;
+}
+
+img.img_5
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 302px;
+	height: 325px;
+}
+
+img.img_6
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 601px;
+	height: 278px;
+}
+
+img.img_7
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 183px;
+	height: 136px;
+}
+
+ol.ol_1
+{
+	padding-left: 0px;
+	list-style-type: decimal;
+	margin-left: 36pt;
+}
+
+img.img_8
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 210px;
+	height: 245px;
+}
+
+p.p_2
+{
+	margin-left: 36pt;
+}
+
+img.img_9
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 260px;
+	height: 245px;
+}
+
+img.img_10
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 507px;
+	height: 416px;
+}
+
+img.img_11
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 355px;
+	height: 114px;
+	border-top-style: solid;
+	border-top-width: 1pt;
+	border-bottom-style: solid;
+	border-bottom-width: 1pt;
+	border-left-style: solid;
+	border-left-width: 1pt;
+	border-right-style: solid;
+	border-right-width: 1pt;
+}
+
+p.p_3
+{
+	text-align: center;
+}
+
+ul.ul_2
+{
+	padding-left: 0px;
+	list-style-type: circle;
+	margin-left: 38pt;
+}
+
+img.img_12
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 602px;
+	height: 311px;
+}
+
+img.img_13
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 602px;
+	height: 263px;
+}
+
+h4.Heading4
+{
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	margin-top: 6pt;
+	margin-bottom: 2pt;
+	mc-heading-level: 4;
+	color: #000000;
+	font-family: Arial;
+	font-size: 11pt;
+	font-weight: Bold;
+	padding-top: 12px;
+	padding-bottom: 8px;
+}
+
+img.img_14
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 148px;
+	height: 247px;
+}
+
+img.img_15
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 402px;
+	height: 425px;
+}
+
+img.img_16
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 601px;
+	height: 264px;
+}
+
+img.img_17
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 601px;
+	height: 263px;
+}
+
+img.img_18
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 602px;
+	height: 309px;
+}
+
+img.img_19
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 602px;
+	height: 238px;
+}
+
+img.img_20
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 486px;
+	height: 326px;
+}
+
+img.img_21
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 371px;
+	height: 363px;
+}
+
+img.img_22
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 209px;
+	height: 290px;
+}
+
+img.img_23
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 458px;
+	height: 266px;
+}
+
+img.img_24
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 497px;
+	height: 271px;
+}
+
+p.ListParagraph_1_1
+{
+	font-size: 11pt;
+	margin-left: 36pt;
+	font-family: Calibri;
+	text-align: center;
+}
+
+p.ListParagraph_1_2
+{
+	font-size: 11pt;
+	margin-left: 36pt;
+	font-family: Calibri;
+	font-weight: bold;
+}
+
+img.img_25
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 494px;
+	height: 265px;
+}
+
+img.img_26
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 457px;
+	height: 247px;
+}
+
+img.img_27
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 211px;
+	height: 155px;
+}
+
+img.img_28
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 454px;
+	height: 241px;
+}
+
+img.img_29
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 444px;
+	height: 235px;
+}
+
+img.img_30
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 197px;
+	height: 221px;
+}
+
+img.img_31
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 449px;
+	height: 253px;
+}
+
+h5.Heading5
+{
+	font-size: 11pt;
+	page-break-after: avoid;
+	page-break-inside: avoid;
+	margin-top: 6pt;
+	margin-bottom: 2pt;
+	mc-heading-level: 5;
+	font-family: 'Calibri Light';
+	color: #2F5496;
+	font-weight: normal;
+}
+
+img.img_32
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 602px;
+	height: 366px;
+}
+
+p.ListParagraph_2
+{
+	font-size: 11pt;
+	font-family: Calibri;
+	font-weight: bold;
+}
+
+li.ListParagraph_1
+{
+	font-size: 11pt;
+	font-family: Calibri;
+	font-weight: bold;
+}
+
+img.img_33
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 602px;
+	height: 293px;
+}
+
+span.span_3
+{
+	background-color: #FFFF00;
+}
+
+img.img_34
+{
+	visibility: visible;
+	mso-wrap-style: square;
+	width: 469px;
+	height: 360px;
+}
+
+p.ListParagraph_1_3
+{
+	font-size: 11pt;
+	font-family: Calibri;
+	margin-left: 0pt;
+}
+
+span.span_4
+{
+	color: #0070C0;
+	text-decoration: underline;
+}
+
+img.img_35
+{
+	z-index: 1;
+	visibility: visible;
+	mso-wrap-style: square;
+	mso-width-percent: 0;
+	mso-height-percent: 0;
+	mso-wrap-distance-left: 9pt;
+	mso-wrap-distance-top: 0;
+	mso-wrap-distance-right: 9pt;
+	mso-wrap-distance-bottom: 0;
+	mso-position-horizontal: absolute;
+	mso-position-horizontal-relative: text;
+	mso-position-vertical: absolute;
+	mso-position-vertical-relative: text;
+	mso-width-percent: 0;
+	mso-height-percent: 0;
+	mso-width-relative: page;
+	mso-height-relative: page;
+	margin-left: 394.6pt;
+	width: 150px;
+	height: 36px;
+}
+
+p.Note
+{
+	font-family: Calibri;
+	font-size: 11pt;
+	padding: 8pt;
+	margin: 8pt;
+	margin-bottom: 20pt;
+	margin-top: 20pt;
+	padding-left: 28pt;
+	background-position: 4px;
+	background: url('../Images/Folded Text Document - Info 24 h p.png') 5px 9px no-repeat;
+	border: solid 2px #a4d6a4;
+	background-color: #fafffa;
+}
+
+p.Tip
+{
+	font-family: Calibri;
+	font-size: 11pt;
+	border-width: 2px;
+	padding: 8pt;
+	padding-left: 28pt;
+	margin: 8pt;
+	margin-bottom: 20pt;
+	margin-left: 8pt;
+	margin-right: 8pt;
+	margin-top: 20pt;
+	background: url('../Images/Bulb On 24 n p.png') 4px 8px no-repeat;
+	border: solid 2px #f8d373;
+	background-color: #fffff5;
+}
+
+b.Note
+{
+	
+}
+
+MadCap|dropDownHead
+{
+	text-decoration: none;
+	font-family: Arial;
+	font-size: 10pt;
+	font-style: normal;
+	font-weight: bold;
+	font: Arial;
+	color: #0400e6;
+}
+
+MadCap|dropDownHotspot
+{
+	font-size: 10pt;
+	font-family: Arial;
+	color: #696969;
+}
+
+MadCap|dropDown
+{
+	margin: 8pt;
+	margin-bottom: 20pt;
+	mc-image-spacing: 5px;
+	margin-top: 20pt;
+	padding: 12px;
+	mc-closed-image: url('../Images/Plus16.png');
+	mc-open-image: url('../Images/Minus16.png');
+	border: solid 2px #c8c8c8;
+	background: #fafafa;
+}
+
+@media only screen and (max-width: 1279px)
+{
+	span.span_2
+	{
+		font-weight: ;
+	}
+}
+
+#c1searchFilter
+{
+	font-family: Calibri;
+}
+
