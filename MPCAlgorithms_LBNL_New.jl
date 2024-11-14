@@ -25,6 +25,7 @@ will be used as input for the next iteration of the MPC.
 =#
 
 using Gurobi
+using DataFrames
 include("Input_Parameters.jl")
 
 function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_States)
@@ -59,12 +60,12 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
         msize = size(M_States)[1];
 
         # Initialize the starting values with information from J_States and M_States
-        # InStoragePCM_C_1 = max(min(M_States[msize, :"PCM_Cold_SOC"], 1.05), 0) # [1]
-        # InStoragePCM_H_1 = max(min(M_States[msize, :"PCM_Hot_SOC"], 1.05), 0) # [1]
-        InStoragePCM_C_1 = M_States[msize, :"PCM_Cold_SOC"] # [1]
-        InStoragePCM_H_1 = M_States[msize, :"PCM_Hot_SOC"] # [1]
+        InStoragePCM_C_1 = max(min(M_States[msize, :"PCM_Cold_SOC"], 1.05), -0.05) # [1]
+        InStoragePCM_H_1 = max(min(M_States[msize, :"PCM_Hot_SOC"], 1.05), -0.05) # [1]
+        # InStoragePCM_C_1 = M_States[msize, :"PCM_Cold_SOC"] # [1]
+        # InStoragePCM_H_1 = M_States[msize, :"PCM_Hot_SOC"] # [1]
         
-        InStorageBattery_1 = J_States[3] # [kWh]
+        InStorageBattery_1 = J_States[1, 3] # [kWh]
         TemperatureIndoor_1 = M_States[msize, :"Indoor_Temp"] - 273.15 # [°C]
         
         # These two variables mean that whether the system is in heating mode or cooling mode at the start of the current iteration.
@@ -72,9 +73,9 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
         cooling_0 = 0
 
         if iteration > 1
-            println("M_States")
-            print(M_States)
-            println()
+            # println("M_States")
+            # print(M_States)
+            # println()
             time_intervals = zeros(msize-1); # [hr]
             
             heating_0 = 0
@@ -90,10 +91,12 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
             for i = 1:msize-1
                 time_intervals[i] = (M_States[i+1, :"Time"] - M_States[i, :"Time"])/3600 # [hr]
             end
+            #=
             println("time intervals")
             print(time_intervals)
             println()
             println("E_Pump_1_0")
+            =#
             E_Pump_1_0 = sum(((M_States[i+1, :"Pump 1 Electric Power"] + M_States[i, :"Pump 1 Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
             print(E_Pump_1_0)
             println()
@@ -103,9 +106,9 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
             E_Fan_0 = sum(((M_States[i+1, :"Fan Coil Fan Electric Power"] + M_States[i, :"Fan Coil Fan Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
             
             # Julia States
-            PVGen_0 = J_States[1] # [kWh] PV Generation at last timestep (Actual)
-            E_other_0 = J_States[2] # [kWh] Other Electrical Load (from schedule) at last timestep (Actual)
-            B_SOC_0 = J_States[3] # [kWh] Battery SOC at last timestep (Actual)
+            PVGen_0 = J_States[1, 1] # [kWh] PV Generation at last timestep (Actual)
+            E_other_0 = J_States[1, 2] # [kWh] Other Electrical Load (from schedule) at last timestep (Actual)
+            B_SOC_0 = J_States[1, 3] # [kWh] Battery SOC at last timestep (Actual)
             
             E_Modelica_0 = E_Pump_1_0 + E_Pump_2_0 + E_HP_0 + E_Fan_0 # [kWh] Actual Electrical Load from HP system at last timestep
             Total_Load_0 = E_Modelica_0 + E_other_0 # [kWh] Actual total Electrical Load at last timestep
@@ -475,14 +478,24 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
     begin
         if status == MOI.OPTIMAL
             # Collect J_States (Julia States: the states that come from Julia MPC which will be used as input for the Julia MPC at next iteration)
+            
+            #=
             J_States_new = zeros(4)
 
             J_States_new[1] = PVGeneration[1] * PVSize # [kWh] PV energy generation from current timestep
             J_States_new[2] = value.(E_total[1]) # [kWh] Total Load from time step 1
             J_States_new[3] = value.(InStorageBattery[1]) # [kWh] The battery SOC at the beginning of time step 1
             J_States_new[4] = value.(PV2G[1]) # [kWh] Total curtailment from time step 1
-            println(J_States_new)
+            # println(J_States_new)
+            =#
 
+            J_States_new = DataFrame(
+                PV_Generation = [PVGeneration[1] * PVSize],
+                House_Load = [value.(E_total[1])],
+                Battery_Energy = [value.(InStorageBattery[1])],
+                Curtailment = [value.(PV2G[1])]
+            )
+            
             # Collect operational commands needed as input for FMU
             Modelica_Input = 0
             if value.(PCM_state[2, 1]) == 1
@@ -502,7 +515,14 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
         else
             # If the model is not feasible, return default values
             println("Model is infeasible or solver encountered an issue.")
-            J_States_new = [PVGeneration[1] * PVSize, (E_Lighting[1] + E_Plugs[1] + P_Controls + P_AHU), InStorageBattery_1, 0] # Default values for J_States
+            
+            J_States_new = DataFrame(
+                PV_Generation = [PVGeneration[1] * PVSize],
+                House_Load = [(E_Lighting[1] + E_Plugs[1] + P_Controls + P_AHU)],
+                Battery_Energy = [InStorageBattery_1],
+                Curtailment = [0]
+            )
+            # J_States_new = [PVGeneration[1] * PVSize, (E_Lighting[1] + E_Plugs[1] + P_Controls + P_AHU), InStorageBattery_1, 0] # Default values for J_States
             Modelica_Input = 0              # Default value for Modelica_Input
             CurrentCost = 0.0               # Default cost
         end

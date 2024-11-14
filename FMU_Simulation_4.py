@@ -73,7 +73,6 @@ def fmu(iteration, states, commands, time_points, model):
     time = res['time']
     data = {
         'Time': time, 
-        'Fan Coil Fan Electric Power': res['fan_coil_fan_electric_power'], 
         'HP Electric Power': res['heat_pump_electric_power'],
         'HP Mode': res['heat_pump_mode'], 
         'HP ON OFF': res['heat_pump_on_off'], 
@@ -90,13 +89,16 @@ def fmu(iteration, states, commands, time_points, model):
         'Heat Transfer Hot PCM': res['heat_transfer_hot_pcm'], 
         'FCU Heat Delivered': res['fcu_heat_delivered'], 
         'Exact System Mode': res['exact_system_mode'], 
-        'FCU Entering Water Temperature ': res['fcu_entering_water_temperature'], 
-        'FCU Leaving Water Temperature ': res['fcu_leaving_water_temperature'],
+        'FCU Entering Water Temperature': res['fcu_entering_water_temperature'], 
+        'FCU Leaving Water Temperature': res['fcu_leaving_water_temperature'],
         'Fan Coil Fan Mass Flow': res['fan_coil_fan_mass_flow'], 
         'Heat Pump Supply Water Temperature': res['heat_pump_supply_water_temperature'],
         'Heat Pump Return Water Temperature': res['heat_pump_return_water_temperature'], 
         'Heat Pump Compressor Speed': res['heat_pump_compressor_speed'],
-        'FCU Mode': res['FMUMode']
+        'FCU Mode': res['FCUmode'],
+        'Pump 1 Mass Flow': res['pump_1_mass_flow'],
+        'Pump 2 Mass Flow': res['pump_2_mass_flow'],
+        'Fan Coil Fan Electric Power': res['fan_coil_fan_electric_power']
     }
 
     # This is the M_States output used for Julia at next iteration:

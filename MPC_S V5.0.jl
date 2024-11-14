@@ -107,7 +107,7 @@ begin
     TimeEnd = 8760 * f_run;
     # Opt_Horizon = 6 * f_run # [intervals]
     # NumRun = (TimeEnd-TimeStart+1) - Opt_Horizon + 1; # This is the max number of runs allowed for a full year of data
-    NumRun = 24*12
+    NumRun = 12*24*14
 
     # Define the sampling intervals
     stepsizes = [5, 30, 60, 120] # minutes
@@ -149,39 +149,53 @@ begin
     # Initialize J_States: [PV_generation, E_0, InStorageBattery]
     #=
     These are the current initial conditions:
-        PV Generation at last timestep = 0 [kW]
-        Actual Power consumption at last timestep = 0 [kW]
+        PV Generation at last timestep = 0 [kWh]
+        Actual House load consumption at last timestep = 0 [kWh]
         Battery Initial SOC = 0.5
     =#
-    global current_j_states = [Initial_PV_Gen, Initial_P_0, Initial_B_SOC*BatterySize, Initial_Curtailment]
-    
+    initial_j_states = DataFrame(
+        PV_Generation = [Initial_PV_Gen],
+        House_Load = [Initial_P_0],
+        Battery_Energy = [Initial_B_SOC*BatterySize],
+        Curtailment = [Initial_Curtailment]
+    )
+    J_States_list = [initial_j_states]
+
+    Solve_failure = zeros(NumRun);
+    Actions = zeros(NumRun);
     Costs = zeros(NumRun);
     AccumulatedCosts = zeros(NumRun);
-    Curtailments = zeros(NumRun);
-    fmu_temp = zeros(NumRun);
-    fmu_indoor_temp = zeros(NumRun);
-    Solve_failure = zeros(NumRun);
-    AllStates = zeros(NumRun, 4);
-
-    Heat_pump_modes_j = zeros(NumRun);
-    HP_H_Usage_j = zeros(NumRun)
-    
-    fmu_HP_Mode = zeros(NumRun)
-    fmu_FCU_Mode = zeros(NumRun)
-    fmu_HP_power = zeros(NumRun)
-    fmu_Useful_Thermal= zeros(NumRun)
-    fmu_HT_PCM_C = zeros(NumRun)
-    fmu_HT_PCM_H = zeros(NumRun)
-    fmu_system_Mode = zeros(NumRun)
-    fmu_FCU = zeros(NumRun)
-    fmu_fan = zeros(NumRun)
-    fmu_Pump1 = zeros(NumRun)
-    fmu_Pump2 = zeros(NumRun)
-    fmu_PCM_H_Temp = zeros(NumRun)
-    fmu_PCM_C_Temp = zeros(NumRun)
     global TotalCost = 0;
 
-    Actions = zeros(NumRun);
+    fmu_temp = zeros(NumRun);
+    fmu_PCM_C_SOC = zeros(NumRun);
+    fmu_PCM_H_SOC = zeros(NumRun);
+    fmu_indoor_temp = zeros(NumRun);
+    fmu_Pump1 = zeros(NumRun);
+    fmu_Pump2 = zeros(NumRun);
+    fmu_HP_Mode = zeros(NumRun);
+    fmu_HP_ON_OFF = zeros(NumRun);
+    fmu_HP_power = zeros(NumRun);
+    fmu_Useful_Thermal= zeros(NumRun);
+    fmu_fan_power = zeros(NumRun);
+    fmu_PCM_C_Temp = zeros(NumRun);
+    fmu_PCM_H_Temp = zeros(NumRun);
+    fmu_P1_Mass_Flow = zeros(NumRun);
+    fmu_P2_Mass_Flow = zeros(NumRun);
+    fmu_HT_PCM_C = zeros(NumRun);
+    fmu_HT_PCM_H = zeros(NumRun);
+    fmu_FCU_Heat = zeros(NumRun);
+    fmu_system_Mode = zeros(NumRun);
+    fmu_FCU_W_Enter_Temp = zeros(NumRun);
+    fmu_FCU_W_Leave_Temp = zeros(NumRun);
+    fmu_Fan_Coil_Mass_Flow = zeros(NumRun);
+    fmu_HP_W_Supply_Temp = zeros(NumRun);
+    fmu_HP_W_Return_Temp = zeros(NumRun);
+    fmu_HP_Compressor_Speed = zeros(NumRun);
+    fmu_FCU_Mode = zeros(NumRun);
+    
+    # Heat_pump_modes_j = zeros(NumRun);
+    # HP_H_Usage_j = zeros(NumRun);
 end
 
 ############ Data Preparations ############
@@ -191,52 +205,66 @@ Q_total, Q_cd, Q_cv, Q_rh, Q_rc, TC = passive_model(calibration_filepath, df, T_
 pv_cf = Generate_PV(df)
 e_load = generate_schedules(f_run, TimeEnd, "complex")
 
-
 df = combine_dfs(df, Q_total, pv_cf, e_load)
-
 
 ############ Program Execution ############
 runtime = @elapsed begin
     starttime = weather.DateTime[TimeStart];
     
-    initial_schedule = [0, 0]; # Do nothing while the model is solving the first iteration
     initial_timepoints = [0, 60*stepsize]
+    initial_schedule = [0, 0]; # Do nothing while the model is solving the first iteration
+    # Actions[1] = 0;
+
     res = FMU.fmu(1, initialstates, initial_schedule, initial_timepoints, model)
     initial_m_states = pandas_to_julia(res)
     
-    Actions[1] = 0;   
-    AllStates[1, 1] = current_j_states[3]
-    AllStates[1, 2] = initial_m_states[end, "PCM_Hot_SOC"]
-    AllStates[1, 3] = initial_m_states[end, "PCM_Cold_SOC"]
+    fmu_temp[1] = initial_m_states[end, "Ambient Temp"];
+    fmu_PCM_C_SOC[1] = initial_m_states[end, "PCM_Hot_SOC"];
+    fmu_PCM_H_SOC[1] = initial_m_states[end, "PCM_Cold_SOC"];
+    fmu_indoor_temp[1] = initial_m_states[end, "Indoor_Temp"];
+    fmu_HP_Mode[1] = initial_m_states[end, "HP Mode"];
+    fmu_HP_ON_OFF[1] = initial_m_states[end, "HP ON OFF"];
+
+    fmu_FCU_Mode[1] = initial_m_states[end, "FCU Mode"];
+    fmu_system_Mode[1] = initial_m_states[end, "Exact System Mode"];
+    fmu_PCM_H_Temp[1] = initial_m_states[end, "PCM_Hot_Temp"];
+    fmu_PCM_C_Temp[1] = initial_m_states[end, "PCM_Cold_Temp"];
+    fmu_FCU_W_Enter_Temp[1] = initial_m_states[end, "FCU Entering Water Temperature"];
+    fmu_FCU_W_Leave_Temp[1] = initial_m_states[end, "FCU Leaving Water Temperature"];
+    fmu_HP_W_Supply_Temp[1] = initial_m_states[end, "Heat Pump Supply Water Temperature"];
+    fmu_HP_W_Return_Temp[1] = initial_m_states[end, "Heat Pump Return Water Temperature"];
     
-    Curtailments[1] = current_j_states[4]
-    fmu_temp[1] = initial_m_states[1, "Ambient Temp"]
-    fmu_indoor_temp[1] = initial_m_states[end, "Indoor_Temp"]
-    fmu_HP_Mode[1] = initial_m_states[1, "HP Mode"]
-    fmu_FCU_Mode[1] = initial_m_states[1, "FCU Mode"]
-    fmu_system_Mode[1] = initial_m_states[1, "Exact System Mode"]
-    fmu_PCM_H_Temp[1] = initial_m_states[1, "PCM_Hot_Temp"]
-    fmu_PCM_C_Temp[1] = initial_m_states[1, "PCM_Cold_Temp"]
-    fmu_fan[1] = p2e(initial_m_states)[1]
-    fmu_FCU[1] = p2e(initial_m_states)[2]
-    fmu_HP_power[1]= p2e(initial_m_states)[3]
-    fmu_HT_PCM_C[1] = p2e(initial_m_states)[4]
-    fmu_HT_PCM_H[1] = p2e(initial_m_states)[5]
-    fmu_Pump1[1] = p2e(initial_m_states)[6]
-    fmu_Pump2[1] = p2e(initial_m_states)[7]
-    fmu_Useful_Thermal[1]= p2e(initial_m_states)[8]
+    # Average Rate 
+    fmu_Fan_Coil_Mass_Flow[1] = find_average(initial_m_states, "Fan Coil Fan Mass Flow"); #[kg/s]
+    fmu_HP_Compressor_Speed[1] = find_average(initial_m_states, "Heat Pump Compressor Speed");
+    fmu_P1_Mass_Flow[1] = find_average(initial_m_states, "Pump 1 Mass Flow"); #[kg/s]
+    fmu_P2_Mass_Flow[1] = find_average(initial_m_states, "Pump 2 Mass Flow"); #[kg/s]
+
+    # Average Power
+    fmu_fan_power[1] = p2e(initial_m_states)[1]*f_run; #[kW]
+    fmu_FCU_Heat[1] = p2e(initial_m_states)[2]*f_run; #[kW]
+    fmu_HP_power[1]= p2e(initial_m_states)[3]*f_run; #[kW]
+    fmu_HT_PCM_C[1] = p2e(initial_m_states)[4]*f_run; #[kW]
+    fmu_HT_PCM_H[1] = p2e(initial_m_states)[5]*f_run; #[kW]
+    fmu_Pump1[1] = p2e(initial_m_states)[6]*f_run; #[kW]
+    fmu_Pump2[1] = p2e(initial_m_states)[7]*f_run; #[kW]
+    fmu_Useful_Thermal[1]= p2e(initial_m_states)[8]*f_run; #[kW]
 
     # Updates the Julia and Modelica states.
     global current_m_states = initial_m_states
-    
+    global current_j_states = initial_j_states
+
+    M_States_list = [initial_m_states]
 
     for i = TimeStart+1:1:NumRun
         
         println()
         println("Iteration: ", i)
         println()
+        #=
         println("The current M states are:")
         println(current_m_states)
+        =#
 
         # Define timepoints needed for FMU simulation
         timepoints = [Dates.value(weather.DateTime[i]-starttime)/1000, Dates.value(weather.DateTime[i+1]-starttime)/1000] # [s]
@@ -244,11 +272,12 @@ runtime = @elapsed begin
 
         # input_data = resample_mpc(df, i, steps, stepsize)
         input_data = aggregate_energy(df, i, steps, stepsize)
-        println("The input data from the passive model is:")
-        println(input_data)
+        
+        # println("The input data from the passive model is:")
+        # println(input_data)
         # Call the MPC function
         currentcost, new_j_states, input_schedule, didnt_solve = OptimizeV4_1(i-1, TC, steps, stepsize, input_data, current_m_states, current_j_states);
-
+        
         println("Optimization Successful!")
         println()
         println("Input schedule: ", input_schedule)
@@ -257,222 +286,281 @@ runtime = @elapsed begin
         println()
         println("Calling FMU")
 
-        # Call the FMU function with the input (current iteration, operational commands, timepoints, FMU model)
-        res = FMU.fmu(i, initialstates, input_schedule, timepoints, model)
-        println()
-        println("The Modelica Feedbacks are:")
-        println(res)
-        # This is the dataframe output from the current FMU iteration with power consumption and SOC updates etc. (Modelica states)
-        new_m_states = pandas_to_julia(res)
-        
-        # Updates the Julia and Modelica states.
-        global current_m_states = new_m_states
-        global current_j_states = new_j_states
-        
+        # Is the current iteration of optimization infeasible?
+        Solve_failure[i] = didnt_solve
+        # Store actions
+        Actions[i] = input_schedule[1]
         # Add the lost of load (cost) from the current iteration to total lost of load (cost)
         Costs[i] = currentcost;
         AccumulatedCosts[i] = sum(Costs[n] for n = 1:i)
-
-
-        # Store return ambient temperature from fmu to verify epw file
-        fmu_temp[i] = new_m_states[1, "Ambient Temp"]
-        fmu_indoor_temp[i] = new_m_states[end, "Indoor_Temp"]
-        fmu_HP_Mode[i] = new_m_states[1, "HP Mode"]
-        fmu_FCU_Mode[i] = new_m_states[1, "FCU Mode"]
-        fmu_system_Mode[i] = new_m_states[1, "Exact System Mode"]
-        
-        fmu_fan[i] = p2e(new_m_states)[1]
-        fmu_FCU[i] = p2e(new_m_states)[2]
-        fmu_HP_power[i]= p2e(new_m_states)[3]
-        fmu_HT_PCM_C[i] = p2e(new_m_states)[4]
-        fmu_HT_PCM_H[i] = p2e(new_m_states)[5]
-        fmu_Pump1[i] = p2e(new_m_states)[6]
-        fmu_Pump2[i] = p2e(new_m_states)[7]
-        fmu_Useful_Thermal[i]= p2e(new_m_states)[8]
-        fmu_PCM_H_Temp[1] = new_m_states[1, "PCM_Hot_Temp"]
-        fmu_PCM_C_Temp[1] = new_m_states[1, "PCM_Cold_Temp"]
-        # Is the current iteration of optimization infeasible?
-        Solve_failure[i] = didnt_solve
-        
-        # Store the battery SOC, PCM_H SOC, PCM_C SOC, and 
-        
-        AllStates[i, 1] = new_j_states[3]
-        AllStates[i, 2] = new_m_states[1, "PCM_Hot_SOC"]
-        AllStates[i, 3] = new_m_states[1, "PCM_Cold_SOC"]
-        Curtailments[i] = new_j_states[4]
-        # Store actions
-        Actions[i] = input_schedule[1]
         global TotalCost += currentcost;
+
+        # Call the FMU function with the input (current iteration, operational commands, timepoints, FMU model)
+        res = FMU.fmu(i, initialstates, input_schedule, timepoints, model)
+        # println()
+        # println("The Modelica Feedbacks are:")
+        # println(res)
+        
+        # This is the dataframe output from the current FMU iteration with power consumption and SOC updates etc. (Modelica states)
+        new_m_states = pandas_to_julia(res)
+
+        fmu_temp[i] = new_m_states[end, "Ambient Temp"];
+        fmu_PCM_C_SOC[i] = new_m_states[end, "PCM_Hot_SOC"];
+        fmu_PCM_H_SOC[i] = new_m_states[end, "PCM_Cold_SOC"];
+        fmu_indoor_temp[i] = new_m_states[end, "Indoor_Temp"];
+        fmu_HP_Mode[i] = new_m_states[end, "HP Mode"];
+        fmu_HP_ON_OFF[i] = new_m_states[end, "HP ON OFF"];
+
+        fmu_FCU_Mode[i] = new_m_states[end, "FCU Mode"];
+        fmu_system_Mode[i] = new_m_states[end, "Exact System Mode"];
+        fmu_PCM_H_Temp[i] = new_m_states[end, "PCM_Hot_Temp"];
+        fmu_PCM_C_Temp[i] = new_m_states[end, "PCM_Cold_Temp"];
+        fmu_FCU_W_Enter_Temp[i] = new_m_states[end, "FCU Entering Water Temperature"];
+        fmu_FCU_W_Leave_Temp[i] = new_m_states[end, "FCU Leaving Water Temperature"];
+        fmu_HP_W_Supply_Temp[i] = new_m_states[end, "Heat Pump Supply Water Temperature"];
+        fmu_HP_W_Return_Temp[i] = new_m_states[end, "Heat Pump Return Water Temperature"];
+        
+        # Average Rate 
+        fmu_Fan_Coil_Mass_Flow[i] = find_average(new_m_states, "Fan Coil Fan Mass Flow"); #[kg/s]
+        fmu_HP_Compressor_Speed[i] = find_average(new_m_states, "Heat Pump Compressor Speed");
+        fmu_P1_Mass_Flow[i] = find_average(new_m_states, "Pump 1 Mass Flow"); #[kg/s]
+        fmu_P2_Mass_Flow[i] = find_average(new_m_states, "Pump 2 Mass Flow"); #[kg/s]
+
+        # Average Power
+        fmu_fan_power[i] = p2e(new_m_states)[1]*f_run; #[kW]
+        fmu_FCU_Heat[i] = p2e(new_m_states)[2]*f_run; #[kW]
+        fmu_HP_power[i]= p2e(new_m_states)[3]*f_run; #[kW]
+        fmu_HT_PCM_C[i] = p2e(new_m_states)[4]*f_run; #[kW]
+        fmu_HT_PCM_H[i] = p2e(new_m_states)[5]*f_run; #[kW]
+        fmu_Pump1[i] = p2e(new_m_states)[6]*f_run; #[kW]
+        fmu_Pump2[i] = p2e(new_m_states)[7]*f_run; #[kW]
+        fmu_Useful_Thermal[i]= p2e(new_m_states)[8]*f_run; #[kW]
+
+        # Save the Julia and Modelica states.
+        push!(M_States_list, new_m_states);
+        push!(J_States_list, new_j_states);
+
+        # Updates the Julia and Modelica states.
+        global current_m_states = new_m_states;
+        global current_j_states = new_j_states;
     end
 end
 
+final_j_states = DataFrame(
+    PV_Generation = [0],
+    House_Load = [0],
+    Battery_Energy = [0],
+    Curtailment = [0]
+)
+
+push!(J_States_list, final_j_states)
+pop!(Actions)
+insert!(Actions, 1, 0)
+push!(Actions, 0)
+push!(Costs, 0)
+push!(AccumulatedCosts, AccumulatedCosts[end])
+push!(Solve_failure, 0)
+
+insert!(fmu_temp, 1, initial_m_states[1, "Ambient Temp"])
+insert!(fmu_PCM_C_SOC, 1, initial_m_states[1, "PCM_Hot_SOC"])
+insert!(fmu_PCM_H_SOC, 1, initial_m_states[1, "PCM_Cold_SOC"])
+insert!(fmu_indoor_temp, 1, initial_m_states[1, "Indoor_Temp"])
+insert!(fmu_HP_Mode, 1, initial_m_states[1, "HP Mode"])
+insert!(fmu_HP_ON_OFF, 1, initial_m_states[1, "HP ON OFF"])
+insert!(fmu_FCU_Mode, 1, initial_m_states[1, "FCU Mode"])
+insert!(fmu_system_Mode, 1, initial_m_states[1, "Exact System Mode"])
+insert!(fmu_PCM_H_Temp, 1, initial_m_states[1, "PCM_Hot_Temp"])
+insert!(fmu_PCM_C_Temp, 1, initial_m_states[1, "PCM_Cold_Temp"])
+insert!(fmu_FCU_W_Enter_Temp, 1, initial_m_states[1, "FCU Entering Water Temperature"])
+insert!(fmu_FCU_W_Leave_Temp, 1, initial_m_states[1, "FCU Leaving Water Temperature"])
+insert!(fmu_HP_W_Supply_Temp, 1, initial_m_states[1, "Heat Pump Supply Water Temperature"])
+insert!(fmu_HP_W_Return_Temp, 1, initial_m_states[1, "Heat Pump Return Water Temperature"])
+
+push!(fmu_Fan_Coil_Mass_Flow, 0)
+push!(fmu_HP_Compressor_Speed, 0)
+push!(fmu_P1_Mass_Flow, 0)
+push!(fmu_P2_Mass_Flow, 0)
+push!(fmu_fan_power, 0)
+push!(fmu_FCU_Heat, 0)
+push!(fmu_HP_power, 0)
+push!(fmu_HT_PCM_C, 0)
+push!(fmu_HT_PCM_H, 0)
+push!(fmu_Pump1, 0)
+push!(fmu_Pump2, 0)
+push!(fmu_Useful_Thermal, 0)
+
+Datetime_array = df[1:NumRun+1, "DateTime"]
+begin
 #=
-# Plot Accumulated loss of load
-trace1 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=AccumulatedCosts,
-    name="Optimized Storage System"
-)
+    #=
+    # Plot Accumulated loss of load
+    trace1 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=AccumulatedCosts,
+        name="Optimized Storage System"
+    )
 
-p_ll = plot([trace1], Layout(title="Accumulated Loss of Load Over Time", xaxis_title="Hours", yaxis_title="Loss of Load (kWh)"))
-display(p_ll)
-# save_plot(p_ll, folder_path, "Accumulated Loss of Load MPC $version)_$today_date", "png")
-=#
+    p_ll = plot([trace1], Layout(title="Accumulated Loss of Load Over Time", xaxis_title="Hours", yaxis_title="Loss of Load (kWh)"))
+    display(p_ll)
+    # save_plot(p_ll, folder_path, "Accumulated Loss of Load MPC $version)_$today_date", "png")
+    =#
 
-#=
-# Plot Temperature Anamoly
-trace2 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_temp.-fahrenheit_to_kelvin(df[1:NumRun, "Ta"]),
-    name="Temp Diff"
-)
+    #=
+    # Plot Temperature Anamoly
+    trace2 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_temp.-fahrenheit_to_kelvin(df[1:NumRun, "Ta"]),
+        name="Temp Diff"
+    )
 
-p_t = plot([trace2], Layout(title="Temp Difference", xaxis_title="Time Steps", yaxis_title="Temp Anamoly (K)"))
-display(p_t)
-=#
+    p_t = plot([trace2], Layout(title="Temp Difference", xaxis_title="Time Steps", yaxis_title="Temp Anamoly (K)"))
+    display(p_t)
+    =#
 
-trace7 = scatter(
-    x = 1:NumRun,  
-    y=Solve_failure,
-    name="Solve Failure"
-)
-p_f = plot([trace7], Layout(title="Solve Failure vs. Time", xaxis_title="Time Steps", yaxis_title=""))
-display(p_f)
+    trace7 = scatter(
+        x = 1:NumRun,  
+        y=Solve_failure,
+        name="Solve Failure"
+    )
+    p_f = plot([trace7], Layout(title="Solve Failure vs. Time", xaxis_title="Time Steps", yaxis_title=""))
+    display(p_f)
 
-# Plot Indoor and Ambient Temperatures
-trace8 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_indoor_temp.-273.15,
-    name="Indoor Temp"
-)
+    # Plot Indoor and Ambient Temperatures
+    trace8 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_indoor_temp.-273.15,
+        name="Indoor Temp"
+    )
 
-trace9 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_temp.-273.15,
-    name="Ambient Temp"
-)
+    trace9 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_temp.-273.15,
+        name="Ambient Temp"
+    )
 
-p_ts = plot([trace8, trace9], Layout(title="Temperatures", xaxis_title="Time Steps", yaxis_title="Temperatures (C)"))
-display(p_ts)
+    p_ts = plot([trace8, trace9], Layout(title="Temperatures", xaxis_title="Time Steps", yaxis_title="Temperatures (C)"))
+    display(p_ts)
 
-# Plot Julia vs. FMU actions
-trace3 = scatter(
-    x = 1:NumRun,  
-    y=Actions,
-    name="Julia Command"
-)
+    # Plot Julia vs. FMU actions
+    trace3 = scatter(
+        x = 1:NumRun,  
+        y=Actions,
+        name="Julia Command"
+    )
 
-trace12 = scatter(
-    x = 1:NumRun,  
-    y=fmu_system_Mode,
-    name="FMU System Mode"
-)
+    trace12 = scatter(
+        x = 1:NumRun,  
+        y=fmu_system_Mode,
+        name="FMU System Mode"
+    )
 
-trace19 = scatter(
-    x = 1:NumRun,  
-    y=fmu_HP_Mode,
-    name="FMU HP Mode"
-)
+    trace19 = scatter(
+        x = 1:NumRun,  
+        y=fmu_HP_Mode,
+        name="FMU HP Mode"
+    )
 
-p_a = plot([trace3, trace12, trace19], Layout(title="HP Mode, Julia Command vs. FMU Actions", xaxis_title="Time Steps", yaxis_title=""))
-display(p_a)
+    p_a = plot([trace3, trace12, trace19], Layout(title="HP Mode, Julia Command vs. FMU Actions", xaxis_title="Time Steps", yaxis_title=""))
+    display(p_a)
 
-# Plot SOCs
-trace4 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=AllStates[:, 1]/BatterySize,
-    name="Battery SOC"
-)
-trace5 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=AllStates[:, 2],
-    name="PCM H SOC"
-)
-trace6 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=AllStates[:, 3],
-    name="PCM C SOC"
-)
+    # Plot SOCs
+    trace4 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=AllStates[:, 1]/BatterySize,
+        name="Battery SOC"
+    )
+    trace5 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=AllStates[:, 2],
+        name="PCM H SOC"
+    )
+    trace6 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=AllStates[:, 3],
+        name="PCM C SOC"
+    )
 
-p_soc = plot([trace4, trace5, trace6], Layout(title="SOC vs. Time", xaxis_title="Time Steps", yaxis_title="SOC percentage"))
-display(p_soc)
+    p_soc = plot([trace4, trace5, trace6], Layout(title="SOC vs. Time", xaxis_title="Time Steps", yaxis_title="SOC percentage"))
+    display(p_soc)
 
-trace10 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_fan,
-    name="FMU Fan Energy Consumption"
-)
+    trace10 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_fan,
+        name="FMU Fan Energy Consumption"
+    )
 
-trace11 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_FCU,
-    name="FMU Fan Coil Unit Heat Delivered"
-)
+    trace11 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_FCU,
+        name="FMU Fan Coil Unit Heat Delivered"
+    )
 
-trace13 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_HP_power,
-    name="fmu HP Energy Consumption"
-)
+    trace13 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_HP_power,
+        name="fmu HP Energy Consumption"
+    )
 
-trace14 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_HT_PCM_C,
-    name="FMU Heat Transfer PCM C"
-)
+    trace14 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_HT_PCM_C,
+        name="FMU Heat Transfer PCM C"
+    )
 
-trace15 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_HT_PCM_H,
-    name="FMU Heat Transfer PCM H"
-)
+    trace15 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_HT_PCM_H,
+        name="FMU Heat Transfer PCM H"
+    )
 
-trace16 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_Pump1,
-    name="FMU Pump 1"
-)
+    trace16 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_Pump1,
+        name="FMU Pump 1"
+    )
 
-trace17 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_Pump2,
-    name="FMU Pump 2"
-)
+    trace17 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_Pump2,
+        name="FMU Pump 2"
+    )
 
-trace18 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=fmu_Useful_Thermal,
-    name="FMU Useful Thermal Delivered"
-)
+    trace18 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=fmu_Useful_Thermal,
+        name="FMU Useful Thermal Delivered"
+    )
 
-trace19 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=AllStates[:, 2].*(PCM_H_Size),
-    name="PCM H Remaining Energy"
-)
-trace20 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=AllStates[:, 3].*(PCM_C_Size),
-    name="PCM C Remaining Energy"
-)
+    trace19 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=AllStates[:, 2].*(PCM_H_Size),
+        name="PCM H Remaining Energy"
+    )
+    trace20 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=AllStates[:, 3].*(PCM_C_Size),
+        name="PCM C Remaining Energy"
+    )
 
-trace21 = scatter(
-    x = df[1:NumRun, "DateTime"],  
-    y=Curtailments,
-    name="PV Curtailed Energy"
-)
+    trace21 = scatter(
+        x = df[1:NumRun, "DateTime"],  
+        y=Curtailments,
+        name="PV Curtailed Energy"
+    )
 
-p_energy = plot([trace10, trace16, trace17], Layout(title="Device Energy Consumption every 5 minutes", xaxis_title="Time Steps", yaxis_title="Energy Consumption (kWh)"))
-display(p_energy)
+    p_energy = plot([trace10, trace16, trace17], Layout(title="Device Energy Consumption every 5 minutes", xaxis_title="Time Steps", yaxis_title="Energy Consumption (kWh)"))
+    display(p_energy)
 
-p_thermal = plot([trace18, trace11, trace13], Layout(title="Device Thermal Energy every 5 minutes", xaxis_title="Time Steps", yaxis_title="Energy (kWh)"))
-display(p_thermal)
+    p_thermal = plot([trace18, trace11, trace13], Layout(title="Device Thermal Energy every 5 minutes", xaxis_title="Time Steps", yaxis_title="Energy (kWh)"))
+    display(p_thermal)
 
-p_pcm = plot([trace14, trace15, trace19, trace20], Layout(title="PCM Plots", xaxis_title="Time Steps", yaxis_title="Energy (kWh)"))
-display(p_pcm)
+    p_pcm = plot([trace14, trace15, trace19, trace20], Layout(title="PCM Plots", xaxis_title="Time Steps", yaxis_title="Energy (kWh)"))
+    display(p_pcm)
 
-p_curtailed = plot([trace21], Layout(title="Curtailment Plots", xaxis_title="Time Steps", yaxis_title="Energy (kWh)"))
-display(p_curtailed)
+    p_curtailed = plot([trace21], Layout(title="Curtailment Plots", xaxis_title="Time Steps", yaxis_title="Energy (kWh)"))
+    display(p_curtailed)
+=#    
+end
 
 # Runtime per iteration (must be less than the MPC run frequency)
 rt = runtime/(NumRun-TimeStart)
@@ -486,6 +574,8 @@ Inf_pct = 100*Total_Inf/(NumRun-1)
 
 println("There are a total of $Total_Inf infeasible iterations out of $(NumRun-1) iterations, which is $Inf_pct % of the total iterations.")
 
+M_df_combined = reduce(vcat, M_States_list)
+J_df_combined = reduce(vcat, J_States_list)
 
 # EXPORT INTO A CSV FILE (Time series)
 
@@ -496,45 +586,43 @@ begin
         # Record the exact time when the result is produced
         timestamp = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
         # Create file names and sheet names
-        xlsx_file = "MPC$version)_$today_date.$timestamp.xlsx"
-        sheetnames = ["TimeSeries Data"]
+        xlsx_file = "MPC($version)($timestamp).xlsx"
+        sheetnames = ["Discrete Data", "Continuous Data"]
     end
     
     # Store Result Data
     begin
-        column_names = ["DateTime", "Ti (C)", "Ta (C)", "Julia Command", "FMU System Mode", "FMU FCU Mode", "FMU HP Mode", "Curtailment (kWh)",
-        "Battery SOC", "Battery Remaining Energy (kWh)", "PCM H SOC", "PCM C SOC", "PCM H Remaining Energy (kWh)", "PCM C Remaining Energy (kWh)",
-        "PCM H Temp (C)", "PCM H Remaining Energy (kWh)", ]
+        column_names = ["DateTime", "Julia Solve Failure", "Ti (C)", "Ta (C)", "Julia Command", "FMU System Mode", "FMU FCU Mode", "FMU HP Mode", "FMU HP on/off",
+        "PCM H SOC", "PCM C SOC", "PCM H Remaining Energy (kWh)", "PCM C Remaining Energy (kWh)", "PCM H Temp (C)", "PCM C Temp (C)", 
+        "PCM H Ave Heat Transfer (kW)", "PCM C Ave Heat Transfer (kW)", "Useful Ave Thermal Delivered (kW)",
+        "FCU Entering Water Temp", "FCU Leaving Water Temp", "Heat Pump Supply Water Temp", "Heat Pump Return Water Temp", 
+        "FCU Ave Heat Power (kW)", "Fan Ave Power (kW)", "HP Ave Power (kW)", 
+        "Pump 1 Ave Power (kW)", "Pump 2 Ave Power (kW)", "Heat Pump Compressor Speed", 
+        "Fan Coil Fan Ave Mass Flow (kg/s)", "Pump 1 Ave Mass Flow (kg/s)", "Pump 2 Ave Mass Flow (kg/s)", 
+        "Loss of Load (kWh)", "Total Loss of Load (kWh)"]
 
         # Collect lists into a tuple or an array
-        data_lists = (df[1:NumRun, "DateTime"], fmu_indoor_temp.-273.15, fmu_temp.-273.15, Actions, fmu_system_Mode, fmu_FCU_Mode, fmu_HP_Mode,
-        Curtailments, AllStates[:, 1]/BatterySize, AllStates[:, 1], AllStates[:, 2], AllStates[:, 3], AllStates[:, 2].*(PCM_H_Size), AllStates[:, 3].*(PCM_C_Size),
-        )  # Fill in with all your lists up to list10
+        data_lists = [Datetime_array, Solve_failure, fmu_indoor_temp.-273.15, fmu_temp.-273.15, Actions, fmu_system_Mode, fmu_FCU_Mode, fmu_HP_Mode, fmu_HP_ON_OFF,
+        fmu_PCM_H_SOC, fmu_PCM_C_SOC, fmu_PCM_H_SOC.*(PCM_H_Size), fmu_PCM_C_SOC.*(PCM_C_Size), fmu_PCM_H_Temp.-273.15, fmu_PCM_C_Temp.-273.15, 
+        fmu_HT_PCM_H, fmu_HT_PCM_C, fmu_Useful_Thermal, 
+        fmu_FCU_W_Enter_Temp.-273.15, fmu_FCU_W_Leave_Temp.-273.15, fmu_HP_W_Supply_Temp.-273.15, fmu_HP_W_Return_Temp.-273.15, 
+        fmu_FCU_Heat, fmu_fan_power, fmu_HP_power,
+        fmu_Pump1, fmu_Pump2, fmu_HP_Compressor_Speed, 
+        fmu_Fan_Coil_Mass_Flow, fmu_P1_Mass_Flow, fmu_P2_Mass_Flow,
+        Costs, AccumulatedCosts]
         
-        
-        Result_Data = DataFrame(
-            
-
-            "PCM Hot"= AllStates[:, 2],
-
-            _FMU_Fan_ = fmu_fan,
-            _FMU_FCU_ = fmu_FCU,
-            _FMU_HP_ = fmu_HP_power,
-            _FMU_PCM_H_HeatTransfer_ = fmu_HT_PCM_H,
-            _FMU_PCM_C_HeatTransfer_ = fmu_HT_PCM_C,
-            _FMU_Pump1_ = fmu_Pump1,
-            _FMU_Pump2_ = fmu_Pump2,
-            _FMU_Useful_Thermal_ = fmu_Useful_Thermal,
-            _Julia_Solver_Failure_ = Solve_failure,
-        )
+        Discrete_Data = DataFrame(data_lists, column_names)
+        Discrete_Data = hcat(Discrete_Data, J_df_combined)
     end
     # Define the path for the Excel file
     excel_file_path = joinpath(folder_path, xlsx_file)
 
     # Write the DataFrames to different sheets in the same Excel file
     XLSX.openxlsx(excel_file_path, mode="w") do xf
-
         sheet1 = XLSX.addsheet!(xf, sheetnames[1])
-        XLSX.writetable!(sheet1, DataFrames.eachcol(Result_Data), DataFrames.names(Result_Data))
+        XLSX.writetable!(sheet1, DataFrames.eachcol(Discrete_Data), DataFrames.names(Discrete_Data))
+
+        sheet2 = XLSX.addsheet!(xf, sheetnames[2])
+        XLSX.writetable!(sheet2, DataFrames.eachcol(M_df_combined), DataFrames.names(M_df_combined))
     end
 end

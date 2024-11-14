@@ -199,13 +199,11 @@ function p2e(M_States)
     # Length of the M_States dataframe
     msize = size(M_States)[1];
     
-    time_intervals = zeros(msize-1); # [hr]
+    time_intervals = zeros(msize-1);
 
     for i = 1:msize-1
         time_intervals[i] = (M_States[i+1, :"Time"] - M_States[i, :"Time"])/3600 # [hr]
     end
-
-    print(time_intervals)
 
     E_Pump_1_0 = sum(((M_States[i+1, :"Pump 1 Electric Power"] + M_States[i, :"Pump 1 Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
 
@@ -226,4 +224,21 @@ function p2e(M_States)
     E = [E_Fan_0, E_FCU_0, E_HP_0, E_PCM_C_0, E_PCM_H_0, E_Pump_1_0, E_Pump_2_0, Thermal_Power_Delivered_0]
             
     return E
+end 
+
+function find_average(M_States, col_name)
+    
+    # Length of the M_States dataframe
+    msize = size(M_States)[1];
+    
+    time_intervals = zeros(msize-1);
+
+    for i = 1:msize-1
+        time_intervals[i] = (M_States[i+1, :"Time"] - M_States[i, :"Time"]) # [s]
+    end
+
+    time_length = M_States[msize, :"Time"] - M_States[1, :"Time"] # [s]
+    
+    average_value = (sum(((M_States[i+1, "$col_name"] + M_States[i, "$col_name"])/2)*time_intervals[i] for i = 1:(msize-1)))/time_length        
+    return average_value
 end 

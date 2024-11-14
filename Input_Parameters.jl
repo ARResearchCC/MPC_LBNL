@@ -53,6 +53,7 @@ P_Controls = 0.02 # [kW]
 P_AHU = 0 # [kW]
 P_Pumps = 0.04 # [kW]
 
+
 # Solar PV Parameters
 noct_installed = 45 # [°C] The “installed” nominal operating cell temperature. PVWatts assumes this value to be 45 C for rack-mounted arrays and 49 C for roof mount systems with restricted air flow around the module.
 module_height = 5 # [m] The height above ground of the center of the module. The PVWatts default is 5.0.
@@ -75,8 +76,8 @@ begin
     # HP_b = -0.0941
     # HP_c = 0.000464
     
-    COP_H = 4 # COP of heating (currently constant)
-    COP_C = 3.8 # COP of cooling (currently constant)
+    COP_H = 3.7 # COP of heating (currently constant)
+    COP_C = 3.7 # COP of cooling (currently constant)
 
     # C_HP_OP = 0.02 * Cap_HP_H # [$/(kW*YR)] Operational Cost of Heat Pump
 
@@ -87,8 +88,8 @@ begin
     C_PCM_C_OP = 0.02 * PCM_C_Size # [$/(kWh*YR)] Operational Cost of PCM Cooling Storage
 
     # Standard Operating Power of Heat Pump and PCM Thermal Storages 
-    HP_power_H = 2 # [kW] default constant electrical power consumption for heat pump (heating)
-    HP_power_C = 2 # [kW] default constant electrical power consumption for heat pump (cooling)
+    HP_power_H = 1 # [kW] default constant electrical power consumption for heat pump (heating)
+    HP_power_C = 1 # [kW] default constant electrical power consumption for heat pump (cooling)
     
     PCM_H_discharge_rate = 2 # [kW] default constant heat discharging rate of PCM Heating Storage
     PCM_C_discharge_rate = 2 # [kW] default constant heat discharging rate of PCM Cooling Storage
