@@ -11,8 +11,6 @@ begin
 
     # Please unmute the next two lines if you are running this code for the first time and don't have all the packages installed.
     # Pkg.add("JuMP", "CSV", "DataFrames", "PlotlyJS", "Dates", "XLSX", "FileIO", "Base", "Random", "Statistics", "Gurobi", "PyCall")
-    # Pkg.update("Gurobi")
-    # ENV["PYTHON"] = "C:\\Users\\Fred\\anaconda3\\python.exe"
     # Pkg.build("PyCall")
     using JuMP
     using CSV
@@ -28,6 +26,7 @@ begin
     using PyCall
 
     # Code setup
+    include("User_Input.jl")
     include("Input_Parameters.jl")
     include("Data_Conversion.jl")
     include("PassiveModel_5.6.jl")
@@ -35,20 +34,18 @@ begin
     include("ElectricLoad V1.0.jl")
     include("MPCAlgorithms_LBNL_New.jl")
 
-
-    ENV["GRB_LICENSE_FILE"] = "C:\\Users\\Fred\\gurobi.lic" # Fred's license
+    ENV["PYTHON"] = Python_Environment
+    ENV["GRB_LICENSE_FILE"] = Gurobi_License
 
     pushfirst!(PyVector(pyimport("sys")."path"), "C:\\Users\\Fred\\Desktop\\PyFMI")
 
     ############ Load FMU ############
     begin
         pyf = pyimport("pyfmi")
-        FMU = pyimport("FMU_Simulation_4")
-        # Define the path to the FMU file
-        # fmuName = "Stanford_Hybrid_System.fmu"
+        FMU = pyimport(FMU_Simulation_File)
   
         # Load the FMU model
-        model = pyf.load_fmu("C:\\Users\\Fred\\Desktop\\PyFMI\\Stanford_Hybrid_System.fmu")
+        model = pyf.load_fmu(fmu_Name)
     end
 end
 
@@ -60,12 +57,10 @@ begin
     # Please update information of this program to automatically update the code name.
     version = 5.0
 
-    code_name = "MPC_S_V$version._$today_date"
-
     # Create folder to later save data and plots
     begin
         # Define the path for the new folder
-        folder_path = "C:\\Users\\Fred\\Desktop\\PyFMI\\$code_name"
+        folder_path = joinpath(Main_Folder_Path, "$code_name")
 
         # Use mkpath() to create the folder if it doesn't exist
         mkpath(folder_path)
@@ -83,39 +78,28 @@ end
 
 ############ Load Data ############
 begin
-    # Load the weather file. This weather file is a historical weather file with 5 minutes step size. This weather file is treated as the ground truth, but simulated forecast errors are added later.
-    file_name = "C:\\Users\\Fred\\Desktop\\Microgrid_Project\\Data Cleaning\\updated_epw_weather_nonleap_5mins.csv"
-    # file_name = "C:\\Users\\Fred\\Desktop\\Microgrid_Project\\Data\\HMB_data_5mins\\57357_37.46_-122.43_2022.csv"
-
     # Check if the file exists before trying to read it
-    if isfile(file_name)
+    if isfile(weather_file_name)
         # weather = DataFrame(CSV.File(file_name, header=3))
-        weather = DataFrame(CSV.File(file_name))
+        weather = DataFrame(CSV.File(weather_file_name))
     else
-        println("File $file_name not found.")
+        println("File $weather_file_name not found.")
     end
-
-    calibration_filepath = "C:\\Users\\Fred\\Desktop\\PyFMI\\Calibration_Model_Input.xlsx"
 end
 
 ############ Declare Parameters ############
 # Time Horizon Parameters
 begin
-    TimeStart = 1;
-    f_run = 12 # run frequency [times/hour]
     stepsize = 60*(1/f_run) # [min]
     TimeEnd = 8760 * f_run;
     # Opt_Horizon = 6 * f_run # [intervals]
     # NumRun = (TimeEnd-TimeStart+1) - Opt_Horizon + 1; # This is the max number of runs allowed for a full year of data
-    NumRun = 12*24*14
+    NumRun = 5
 
-    # Define the sampling intervals
-    stepsizes = [5, 30, 60, 120] # minutes
     steps = Int[]
-    append!(steps, fill(stepsizes[1], 6))
-    append!(steps, fill(stepsizes[2], 5))
-    append!(steps, fill(stepsizes[3], 21))
-    append!(steps, fill(stepsizes[4], 48))
+    for i in eachindex(stepsizes)
+        append!(steps, fill(stepsizes[i], stepnums[i]))
+    end
 end    
 
 ############ Initialize Space ############
@@ -201,7 +185,7 @@ end
 ############ Data Preparations ############
 
 df = convert_weather(weather, "epw")
-Q_total, Q_cd, Q_cv, Q_rh, Q_rc, TC = passive_model(calibration_filepath, df, T_indoor_constant)
+Q_total, Q_cd, Q_cv, Q_rh, Q_rc, TC = passive_model(calibration_file_path, df, T_indoor_constant)
 pv_cf = Generate_PV(df)
 e_load = generate_schedules(f_run, TimeEnd, "complex")
 
@@ -576,6 +560,7 @@ println("There are a total of $Total_Inf infeasible iterations out of $(NumRun-1
 
 M_df_combined = reduce(vcat, M_States_list)
 J_df_combined = reduce(vcat, J_States_list)
+
 
 # EXPORT INTO A CSV FILE (Time series)
 
