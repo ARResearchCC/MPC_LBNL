@@ -31,7 +31,9 @@ begin
     # About occupancy schedule: 50% occupany from 8 am to 8 pm, 100% occupancy during night time.
 end
 
-function generate_schedules(f_run::Int, total_intervals, schedule)
+function generate_schedules(schedule)
+    f_run = 12;
+    total_intervals = f_run * 8760
     if schedule == "simple"
         return simpleschedule(f_run, total_intervals)
     elseif schedule == "complex"

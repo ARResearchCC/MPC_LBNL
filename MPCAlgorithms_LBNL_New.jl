@@ -28,7 +28,7 @@ using Gurobi
 using DataFrames
 include("Input_Parameters.jl")
 
-function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_States)
+function OptimizeV4_1(iteration, TC, steps, base_stepsize, input_df, M_States, J_States)
     M = 1000
     ########## Instructions  ##########
     # current optimization model output for modelica (0 to 3)
@@ -80,11 +80,21 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
             
             heating_0 = 0
             cooling_0 = 0
-            
+
+            # FCU Mode instead
+            #=
             if M_States[msize, :"HP ON OFF"] == 1 && M_States[msize, :"HP Mode"] == 1 
                 heating_0 = 1
             end
             if M_States[msize, :"HP ON OFF"] == 1 && M_States[msize, :"HP Mode"] == 0
+                cooling_0 = 1
+            end
+            =#
+
+            if M_States[msize, :"FCU Mode"] == 1
+                heating_0 = 1
+            end
+            if M_States[msize, :"FCU Mode"] == -1
                 cooling_0 = 1
             end
 
@@ -177,10 +187,14 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
         begin
             m = Model(Gurobi.Optimizer)
             set_optimizer_attribute(m, "Method", 0)  # 2 corresponds to the barrier method
-            set_optimizer_attribute(m, "FeasibilityTol", 1e-6)
-            set_optimizer_attribute(m, "IntFeasTol", 1e-6)
-            set_optimizer_attribute(m, "OptimalityTol", 1e-8)
+            # set_optimizer_attribute(m, "FeasibilityTol", 1e-6)
+            # set_optimizer_attribute(m, "IntFeasTol", 1e-6)
+            # set_optimizer_attribute(m, "OptimalityTol", 1e-8)
+            set_optimizer_attribute(m, "FeasibilityTol", 1e-5)  # Allow slightly looser feasibility
+            set_optimizer_attribute(m, "IntFeasTol", 1e-5)     # Default integrality tolerance
+            set_optimizer_attribute(m, "OptimalityTol", 1e-3)  # Looser optimality tolerance (0.1%)
             set_optimizer_attribute(m, "Threads", 4)
+            set_optimizer_attribute(m, "TimeLimit", 240)  # Set time limit to 300 seconds
         end
     end
     ######## Decision variables ########
@@ -251,7 +265,7 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
     begin
         # Set single objective for minimizing loss of load in the current iteration of optimization horizon
         
-        @objective(m, Min, sum(G2H[t] for t = 1:NumTime) + 0.01*sum(PV2G[t] for t = 1:NumTime)); # [kWh]
+        @objective(m, Min, sum(G2H[t] for t = 1:NumTime) + 0.01*sum(BatterySize - InStorageBattery[t] for t = 1:NumTime) + 0.01*sum((1.05-PCM_SOC[n, t]) for n = 1:2 for t = 1:NumTime)); # [kWh]
     end
     ############# Expressions ############
     begin
@@ -350,7 +364,7 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
         @constraint(m, [t=1:NumTime], InStorageBattery[t] >= BatterySize * (1-MaxDischarge)); # [kWh]
 
         # ON_Ratio constraint to deal with finer decision making resolution in larger timesteps
-        @constraint(m, [t=1:NumTime], ON_Ratio[t] <= Int(steps[t]/stepsize)); # [1]
+        @constraint(m, [t=1:NumTime], ON_Ratio[t] <= Int(steps[t]/base_stepsize)); # [1]
        
         # Heating and Cooling band temperature controls
         begin 
@@ -490,10 +504,10 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
             =#
 
             J_States_new = DataFrame(
-                PV_Generation = [PVGeneration[1] * PVSize],
-                House_Load = [value.(E_total[1])],
-                Battery_Energy = [value.(InStorageBattery[1])],
-                Curtailment = [value.(PV2G[1])]
+                "PV Generation (kWh)" => [PVGeneration[1] * PVSize],
+                "Lighting Plug Load (kWh)" => [value.(E_total[1])],
+                "Remain Battery Energy (kWh)" => [value.(InStorageBattery[1])],
+                "Curtailment (kWh)" => [value.(PV2G[1])]
             )
             
             # Collect operational commands needed as input for FMU
@@ -517,10 +531,10 @@ function OptimizeV4_1(iteration, TC, steps, stepsize, input_df, M_States, J_Stat
             println("Model is infeasible or solver encountered an issue.")
             
             J_States_new = DataFrame(
-                PV_Generation = [PVGeneration[1] * PVSize],
-                House_Load = [(E_Lighting[1] + E_Plugs[1] + P_Controls + P_AHU)],
-                Battery_Energy = [InStorageBattery_1],
-                Curtailment = [0]
+                "PV Generation (kWh)" => [PVGeneration[1] * PVSize],
+                "Lighting Plug Load (kWh)" => [(E_Lighting[1] + E_Plugs[1] + P_Controls + P_AHU)],
+                "Remain Battery Energy (kWh)" => [InStorageBattery_1],
+                "Curtailment (kWh)" => [0]
             )
             # J_States_new = [PVGeneration[1] * PVSize, (E_Lighting[1] + E_Plugs[1] + P_Controls + P_AHU), InStorageBattery_1, 0] # Default values for J_States
             Modelica_Input = 0              # Default value for Modelica_Input

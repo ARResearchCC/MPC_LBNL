@@ -37,8 +37,9 @@ def fmu(iteration, states, commands, time_points, model):
     # Initialize Modelica model states at iteration = 1 or use last saved states from last iteration
     try:
         if iteration == 1:
-
+            # opts = model.simulate_options()
             # Set up the experiment at iteration = 1
+            model.set('fmuPatch.sine.f', 1/60)
             model.set('hot_PCM.T_start', states[0])
             model.set('cold_PCM.T_start', states[1])
             model.set('RoomModel.roo.T_start', states[2])
@@ -47,32 +48,32 @@ def fmu(iteration, states, commands, time_points, model):
             model.set('fanCoilUnit_hysteresis_air_control.zone_temp_cooling_setpoint', states[5])
             model.set('fanCoilUnit_hysteresis_air_control.zone_temp_heating_setpoint', states[6])
             model.set('fanCoilUnit_hysteresis_air_control.zone_temp_setpoint_delta', states[7])
-            model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[1].uLow", 0)
-            model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[1].uHigh", 0.01)
-            model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[2].uLow", 0)
-            model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[2].uHigh", 0.01)
-
+            # model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[1].uLow", 0)
+            # model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[1].uHigh", 0.01)
+            # model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[2].uLow", 0)
+            # model.set("hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[2].uHigh", 0.01)
             opts['initialize'] = True
-            opts["ncp"] = len(time_points)
+            opts["ncp"] = len(time_points)*2
             
         else:
-            
             # Retrieve fmu model ending state from last iteration if iteration > 1
             state = model.get_fmu_state()
             opts['initialize'] = False
-            opts["ncp"] = len(time_points)
+            opts["ncp"] = len(time_points)*2
             model.set_fmu_state(state)
 
         # Run the simulation from start_time to final_time with specified inputs and options
         res = model.simulate(start_time=time_points[0], final_time=time_points[-1], input=input_data, options=opts)
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print("FMU Initialization Error:")
+        print(model.get_log())
         raise
 
     # Collect output
     time = res['time']
     data = {
         'Time': time, 
+        'FMU mode from MPC': res['schedule_input'],
         'HP Electric Power': res['heat_pump_electric_power'],
         'HP Mode': res['heat_pump_mode'], 
         'HP ON OFF': res['heat_pump_on_off'], 
@@ -98,7 +99,10 @@ def fmu(iteration, states, commands, time_points, model):
         'FCU Mode': res['FCUmode'],
         'Pump 1 Mass Flow': res['pump_1_mass_flow'],
         'Pump 2 Mass Flow': res['pump_2_mass_flow'],
-        'Fan Coil Fan Electric Power': res['fan_coil_fan_electric_power']
+        'Fan Coil Fan Electric Power': res['fan_coil_fan_electric_power'],
+        'hot pcm not fully discharged': res['hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[1].y'],
+        'cold pcm not fully discharged': res['hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[2].y'],
+        'Heat Pump Supply Water Temperature Setpoint': res['AWHP.TWatSup.T']
     }
 
     # This is the M_States output used for Julia at next iteration:

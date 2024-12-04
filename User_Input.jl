@@ -19,10 +19,11 @@ Main_Folder_Path = "C:\\Users\\Fred\\Desktop\\PyFMI"
 
 TimeStart = 1;
 f_run = 12 # run frequency [times/hour]
-NumRun = 5
+NumRun = 24*12*4
 # NumRun = (TimeEnd-TimeStart+1) - Opt_Horizon + 1; # This is the max number of runs allowed for a full year of data
 
 # Define the sampling intervals
 stepsizes = [5, 30, 60, 120] # minutes
 stepnums = [6, 5, 21, 48]
-
+# stepsizes = [60] # minutes
+# stepnums = [72]

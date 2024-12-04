@@ -127,10 +127,11 @@ function resample_mpc(df::DataFrame, start_index::Int, steps::Vector{Int}, steps
     return selected_df
 end
 
-function aggregate_energy(df::DataFrame, start_index::Int, steps::Vector{Int}, stepsize)
+function aggregate_energy(df::DataFrame, start_index::Int, steps::Vector{Int}, base_stepsize)
     selected_df = DataFrame()
 
-    current_index = start_index
+
+    current_index = Int((start_index-1) * steps[1]/base_stepsize + 1)
 
     QPassive = zeros(size(steps)[1])
     Lighting = zeros(size(steps)[1])
@@ -139,14 +140,14 @@ function aggregate_energy(df::DataFrame, start_index::Int, steps::Vector{Int}, s
     PV = zeros(size(steps)[1])
 
     for i = 1:length(steps)
-        next_index = current_index + Int(steps[i] / stepsize)
+        next_index = current_index + Int(steps[i] / base_stepsize)
         if next_index <= nrow(df)
 
-            QPassive[i] = sum(df[current_index:(next_index-1), :"HVAC"]) * (stepsize/60) # [kWh]
-            Lighting[i] = sum(df[current_index:(next_index-1), :"Lighting"]) * (stepsize/60) # [kWh]
-            Plugs[i] = sum(df[current_index:(next_index-1), :"Plugs"]) * (stepsize/60) # [kWh]
-            Occupancy[i] = sum(df[current_index:(next_index-1), :"Occupancy"]) * (stepsize/60) # [kWh]
-            PV[i] = sum(df[current_index:(next_index-1), :"PV"]) * (stepsize/60) # [kWh/kW capacity]
+            QPassive[i] = sum(df[current_index:(next_index-1), :"HVAC"]) * (base_stepsize/60) # [kWh]
+            Lighting[i] = sum(df[current_index:(next_index-1), :"Lighting"]) * (base_stepsize/60) # [kWh]
+            Plugs[i] = sum(df[current_index:(next_index-1), :"Plugs"]) * (base_stepsize/60) # [kWh]
+            Occupancy[i] = sum(df[current_index:(next_index-1), :"Occupancy"]) * (base_stepsize/60) # [kWh]
+            PV[i] = sum(df[current_index:(next_index-1), :"PV"]) * (base_stepsize/60) # [kWh/kW capacity]
             
             current_index = next_index
         else

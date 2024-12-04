@@ -91,10 +91,9 @@ end
 # Time Horizon Parameters
 begin
     stepsize = 60*(1/f_run) # [min]
-    TimeEnd = 8760 * f_run;
-    # Opt_Horizon = 6 * f_run # [intervals]
-    # NumRun = (TimeEnd-TimeStart+1) - Opt_Horizon + 1; # This is the max number of runs allowed for a full year of data
-    NumRun = 5
+    base_stepsize = 5 # [min]
+    base_f_run = 60/base_stepsize
+    # TimeEnd = 8760 * f_run;
 
     steps = Int[]
     for i in eachindex(stepsizes)
@@ -138,10 +137,10 @@ begin
         Battery Initial SOC = 0.5
     =#
     initial_j_states = DataFrame(
-        PV_Generation = [Initial_PV_Gen],
-        House_Load = [Initial_P_0],
-        Battery_Energy = [Initial_B_SOC*BatterySize],
-        Curtailment = [Initial_Curtailment]
+        "PV Generation (kWh)" => [Initial_PV_Gen],
+        "Lighting Plug Load (kWh)" => [Initial_P_0],
+        "Remain Battery Energy (kWh)" => [Initial_B_SOC * BatterySize],
+        "Curtailment (kWh)" => [Initial_Curtailment]
     )
     J_States_list = [initial_j_states]
 
@@ -177,7 +176,12 @@ begin
     fmu_HP_W_Return_Temp = zeros(NumRun);
     fmu_HP_Compressor_Speed = zeros(NumRun);
     fmu_FCU_Mode = zeros(NumRun);
-    
+    fmu_Mode_from_MPC = zeros(NumRun);
+    fmu_PCM_H_empty = zeros(NumRun);
+    fmu_PCM_C_empty = zeros(NumRun);
+    fmu_HP_W_Supply_Temp_SP = zeros(NumRun);
+
+    runtime = zeros(NumRun);
     # Heat_pump_modes_j = zeros(NumRun);
     # HP_H_Usage_j = zeros(NumRun);
 end
@@ -187,12 +191,12 @@ end
 df = convert_weather(weather, "epw")
 Q_total, Q_cd, Q_cv, Q_rh, Q_rc, TC = passive_model(calibration_file_path, df, T_indoor_constant)
 pv_cf = Generate_PV(df)
-e_load = generate_schedules(f_run, TimeEnd, "complex")
+e_load = generate_schedules("complex")
 
 df = combine_dfs(df, Q_total, pv_cf, e_load)
 
 ############ Program Execution ############
-runtime = @elapsed begin
+runtime1 = @elapsed begin
     starttime = weather.DateTime[TimeStart];
     
     initial_timepoints = [0, 60*stepsize]
@@ -203,12 +207,15 @@ runtime = @elapsed begin
     initial_m_states = pandas_to_julia(res)
     
     fmu_temp[1] = initial_m_states[end, "Ambient Temp"];
-    fmu_PCM_C_SOC[1] = initial_m_states[end, "PCM_Hot_SOC"];
-    fmu_PCM_H_SOC[1] = initial_m_states[end, "PCM_Cold_SOC"];
+    fmu_PCM_H_SOC[1] = initial_m_states[end, "PCM_Hot_SOC"];
+    fmu_PCM_C_SOC[1] = initial_m_states[end, "PCM_Cold_SOC"];
     fmu_indoor_temp[1] = initial_m_states[end, "Indoor_Temp"];
     fmu_HP_Mode[1] = initial_m_states[end, "HP Mode"];
     fmu_HP_ON_OFF[1] = initial_m_states[end, "HP ON OFF"];
+    fmu_PCM_H_empty[1] = initial_m_states[end, "hot pcm not fully discharged"];
+    fmu_PCM_C_empty[1] = initial_m_states[end, "cold pcm not fully discharged"];
 
+    fmu_Mode_from_MPC[1] = initial_m_states[end, "FMU mode from MPC"];
     fmu_FCU_Mode[1] = initial_m_states[end, "FCU Mode"];
     fmu_system_Mode[1] = initial_m_states[end, "Exact System Mode"];
     fmu_PCM_H_Temp[1] = initial_m_states[end, "PCM_Hot_Temp"];
@@ -217,7 +224,8 @@ runtime = @elapsed begin
     fmu_FCU_W_Leave_Temp[1] = initial_m_states[end, "FCU Leaving Water Temperature"];
     fmu_HP_W_Supply_Temp[1] = initial_m_states[end, "Heat Pump Supply Water Temperature"];
     fmu_HP_W_Return_Temp[1] = initial_m_states[end, "Heat Pump Return Water Temperature"];
-    
+    fmu_HP_W_Supply_Temp_SP[1] = initial_m_states[end, "Heat Pump Supply Water Temperature Setpoint"];
+
     # Average Rate 
     fmu_Fan_Coil_Mass_Flow[1] = find_average(initial_m_states, "Fan Coil Fan Mass Flow"); #[kg/s]
     fmu_HP_Compressor_Speed[1] = find_average(initial_m_states, "Heat Pump Compressor Speed");
@@ -239,9 +247,11 @@ runtime = @elapsed begin
     global current_j_states = initial_j_states
 
     M_States_list = [initial_m_states]
+end
+runtime[1]= runtime1; #[seconds]
 
-    for i = TimeStart+1:1:NumRun
-        
+for i = TimeStart+1:1:NumRun
+    current_runtime = @elapsed begin
         println()
         println("Iteration: ", i)
         println()
@@ -255,12 +265,12 @@ runtime = @elapsed begin
         # println(timepoints)
 
         # input_data = resample_mpc(df, i, steps, stepsize)
-        input_data = aggregate_energy(df, i, steps, stepsize)
+        input_data = aggregate_energy(df, i, steps, base_stepsize)
         
         # println("The input data from the passive model is:")
         # println(input_data)
         # Call the MPC function
-        currentcost, new_j_states, input_schedule, didnt_solve = OptimizeV4_1(i-1, TC, steps, stepsize, input_data, current_m_states, current_j_states);
+        currentcost, new_j_states, input_schedule, didnt_solve = OptimizeV4_1(i-1, TC, steps, base_stepsize, input_data, current_m_states, current_j_states);
         
         println("Optimization Successful!")
         println()
@@ -289,12 +299,15 @@ runtime = @elapsed begin
         new_m_states = pandas_to_julia(res)
 
         fmu_temp[i] = new_m_states[end, "Ambient Temp"];
-        fmu_PCM_C_SOC[i] = new_m_states[end, "PCM_Hot_SOC"];
-        fmu_PCM_H_SOC[i] = new_m_states[end, "PCM_Cold_SOC"];
+        fmu_PCM_H_SOC[i] = new_m_states[end, "PCM_Hot_SOC"];
+        fmu_PCM_C_SOC[i] = new_m_states[end, "PCM_Cold_SOC"];
         fmu_indoor_temp[i] = new_m_states[end, "Indoor_Temp"];
         fmu_HP_Mode[i] = new_m_states[end, "HP Mode"];
         fmu_HP_ON_OFF[i] = new_m_states[end, "HP ON OFF"];
 
+        fmu_PCM_H_empty[i] = new_m_states[end, "hot pcm not fully discharged"];
+        fmu_PCM_C_empty[i] = new_m_states[end, "cold pcm not fully discharged"];
+        fmu_Mode_from_MPC[i] = new_m_states[end, "FMU mode from MPC"];
         fmu_FCU_Mode[i] = new_m_states[end, "FCU Mode"];
         fmu_system_Mode[i] = new_m_states[end, "Exact System Mode"];
         fmu_PCM_H_Temp[i] = new_m_states[end, "PCM_Hot_Temp"];
@@ -303,7 +316,8 @@ runtime = @elapsed begin
         fmu_FCU_W_Leave_Temp[i] = new_m_states[end, "FCU Leaving Water Temperature"];
         fmu_HP_W_Supply_Temp[i] = new_m_states[end, "Heat Pump Supply Water Temperature"];
         fmu_HP_W_Return_Temp[i] = new_m_states[end, "Heat Pump Return Water Temperature"];
-        
+        fmu_HP_W_Supply_Temp_SP[i] = new_m_states[end, "Heat Pump Supply Water Temperature Setpoint"];
+
         # Average Rate 
         fmu_Fan_Coil_Mass_Flow[i] = find_average(new_m_states, "Fan Coil Fan Mass Flow"); #[kg/s]
         fmu_HP_Compressor_Speed[i] = find_average(new_m_states, "Heat Pump Compressor Speed");
@@ -328,13 +342,14 @@ runtime = @elapsed begin
         global current_m_states = new_m_states;
         global current_j_states = new_j_states;
     end
+    runtime[i] = current_runtime # [s]
 end
 
 final_j_states = DataFrame(
-    PV_Generation = [0],
-    House_Load = [0],
-    Battery_Energy = [0],
-    Curtailment = [0]
+    "PV Generation (kWh)" => [0],
+    "Lighting Plug Load (kWh)" => [0],
+    "Remain Battery Energy (kWh)" => [0],
+    "Curtailment (kWh)" => [0]
 )
 
 push!(J_States_list, final_j_states)
@@ -344,14 +359,18 @@ push!(Actions, 0)
 push!(Costs, 0)
 push!(AccumulatedCosts, AccumulatedCosts[end])
 push!(Solve_failure, 0)
+push!(runtime, 0)
 
+insert!(fmu_PCM_H_empty, 1, initial_m_states[1, "hot pcm not fully discharged"])
+insert!(fmu_PCM_C_empty, 1, initial_m_states[1, "cold pcm not fully discharged"])
 insert!(fmu_temp, 1, initial_m_states[1, "Ambient Temp"])
-insert!(fmu_PCM_C_SOC, 1, initial_m_states[1, "PCM_Hot_SOC"])
-insert!(fmu_PCM_H_SOC, 1, initial_m_states[1, "PCM_Cold_SOC"])
+insert!(fmu_PCM_H_SOC, 1, initial_m_states[1, "PCM_Hot_SOC"])
+insert!(fmu_PCM_C_SOC, 1, initial_m_states[1, "PCM_Cold_SOC"])
 insert!(fmu_indoor_temp, 1, initial_m_states[1, "Indoor_Temp"])
 insert!(fmu_HP_Mode, 1, initial_m_states[1, "HP Mode"])
 insert!(fmu_HP_ON_OFF, 1, initial_m_states[1, "HP ON OFF"])
 insert!(fmu_FCU_Mode, 1, initial_m_states[1, "FCU Mode"])
+insert!(fmu_Mode_from_MPC, 1, initial_m_states[1, "FMU mode from MPC"])
 insert!(fmu_system_Mode, 1, initial_m_states[1, "Exact System Mode"])
 insert!(fmu_PCM_H_Temp, 1, initial_m_states[1, "PCM_Hot_Temp"])
 insert!(fmu_PCM_C_Temp, 1, initial_m_states[1, "PCM_Cold_Temp"])
@@ -359,6 +378,7 @@ insert!(fmu_FCU_W_Enter_Temp, 1, initial_m_states[1, "FCU Entering Water Tempera
 insert!(fmu_FCU_W_Leave_Temp, 1, initial_m_states[1, "FCU Leaving Water Temperature"])
 insert!(fmu_HP_W_Supply_Temp, 1, initial_m_states[1, "Heat Pump Supply Water Temperature"])
 insert!(fmu_HP_W_Return_Temp, 1, initial_m_states[1, "Heat Pump Return Water Temperature"])
+insert!(fmu_HP_W_Supply_Temp_SP, 1, initial_m_states[1, "Heat Pump Supply Water Temperature Setpoint"])
 
 push!(fmu_Fan_Coil_Mass_Flow, 0)
 push!(fmu_HP_Compressor_Speed, 0)
@@ -373,7 +393,11 @@ push!(fmu_Pump1, 0)
 push!(fmu_Pump2, 0)
 push!(fmu_Useful_Thermal, 0)
 
-Datetime_array = df[1:NumRun+1, "DateTime"]
+# Select the desired rows
+resample_ratio = div(stepsize, base_stepsize)
+selected_rows = Int.(collect(1:resample_ratio:size(df, 1)))
+resampled_df = df[selected_rows, :]
+Datetime_array = resampled_df[1:NumRun+1, "DateTime"]
 begin
 #=
     #=
@@ -547,9 +571,6 @@ begin
 end
 
 # Runtime per iteration (must be less than the MPC run frequency)
-rt = runtime/(NumRun-TimeStart)
-println("")
-println("The runtime is $rt seconds")
 
 println("The total loss of load is $TotalCost kWh")
 
@@ -577,20 +598,20 @@ begin
     
     # Store Result Data
     begin
-        column_names = ["DateTime", "Julia Solve Failure", "Ti (C)", "Ta (C)", "Julia Command", "FMU System Mode", "FMU FCU Mode", "FMU HP Mode", "FMU HP on/off",
-        "PCM H SOC", "PCM C SOC", "PCM H Remaining Energy (kWh)", "PCM C Remaining Energy (kWh)", "PCM H Temp (C)", "PCM C Temp (C)", 
+        column_names = ["DateTime", "Run Time (s)", "Julia Solve Failure", "Ti (C)", "Ta (C)", "MPC Command", "FMU Mode Received from MPC", "FMU System Mode", "FMU FCU Mode", "FMU HP Mode", "FMU HP on/off",
+        "PCM H SOC", "PCM C SOC", "PCM H Remaining Energy (kWh)", "PCM C Remaining Energy (kWh)", "PCM H Temp (C)", "PCM C Temp (C)", "PCM H Not Fully Discharged", "PCM C Not Fully Discharged", 
         "PCM H Ave Heat Transfer (kW)", "PCM C Ave Heat Transfer (kW)", "Useful Ave Thermal Delivered (kW)",
-        "FCU Entering Water Temp", "FCU Leaving Water Temp", "Heat Pump Supply Water Temp", "Heat Pump Return Water Temp", 
+        "FCU Entering Water Temp", "FCU Leaving Water Temp", "Heat Pump Supply Water Temp", "Heat Pump Return Water Temp", "Heat Pump Supply Water Temp Setpoint",
         "FCU Ave Heat Power (kW)", "Fan Ave Power (kW)", "HP Ave Power (kW)", 
         "Pump 1 Ave Power (kW)", "Pump 2 Ave Power (kW)", "Heat Pump Compressor Speed", 
         "Fan Coil Fan Ave Mass Flow (kg/s)", "Pump 1 Ave Mass Flow (kg/s)", "Pump 2 Ave Mass Flow (kg/s)", 
         "Loss of Load (kWh)", "Total Loss of Load (kWh)"]
 
         # Collect lists into a tuple or an array
-        data_lists = [Datetime_array, Solve_failure, fmu_indoor_temp.-273.15, fmu_temp.-273.15, Actions, fmu_system_Mode, fmu_FCU_Mode, fmu_HP_Mode, fmu_HP_ON_OFF,
-        fmu_PCM_H_SOC, fmu_PCM_C_SOC, fmu_PCM_H_SOC.*(PCM_H_Size), fmu_PCM_C_SOC.*(PCM_C_Size), fmu_PCM_H_Temp.-273.15, fmu_PCM_C_Temp.-273.15, 
+        data_lists = [Datetime_array, runtime, Solve_failure, fmu_indoor_temp.-273.15, fmu_temp.-273.15, Actions, fmu_Mode_from_MPC, fmu_system_Mode, fmu_FCU_Mode, fmu_HP_Mode, fmu_HP_ON_OFF,
+        fmu_PCM_H_SOC, fmu_PCM_C_SOC, fmu_PCM_H_SOC.*(PCM_H_Size), fmu_PCM_C_SOC.*(PCM_C_Size), fmu_PCM_H_Temp.-273.15, fmu_PCM_C_Temp.-273.15, fmu_PCM_H_empty, fmu_PCM_C_empty,
         fmu_HT_PCM_H, fmu_HT_PCM_C, fmu_Useful_Thermal, 
-        fmu_FCU_W_Enter_Temp.-273.15, fmu_FCU_W_Leave_Temp.-273.15, fmu_HP_W_Supply_Temp.-273.15, fmu_HP_W_Return_Temp.-273.15, 
+        fmu_FCU_W_Enter_Temp.-273.15, fmu_FCU_W_Leave_Temp.-273.15, fmu_HP_W_Supply_Temp.-273.15, fmu_HP_W_Return_Temp.-273.15, fmu_HP_W_Supply_Temp_SP.-273.15,
         fmu_FCU_Heat, fmu_fan_power, fmu_HP_power,
         fmu_Pump1, fmu_Pump2, fmu_HP_Compressor_Speed, 
         fmu_Fan_Coil_Mass_Flow, fmu_P1_Mass_Flow, fmu_P2_Mass_Flow,

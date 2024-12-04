@@ -1,6 +1,6 @@
 # Input Parameters 
 
-Initial_Ti = 22 # [°C]
+Initial_Ti = 25 # [°C]
 Initial_PV_Gen = 0 # [kWh]
 Initial_P_0 = 0 # [kWh]
 Initial_B_SOC = 0.5
@@ -16,9 +16,9 @@ Intial_PCM_H_SOC = 0.5
 begin
     # Temperature standard
     # Temperature setpoints control the direct heating or cooling of the space through heat pump or PCM discharge.
-    zone_temp_cooling_setpoint = 22 # [°C]
-    zone_temp_heating_setpoint = 20 # [°C]
-    zone_temp_setpoint_delta = 0.5 # [°C]
+    zone_temp_cooling_setpoint = 28 # [°C]
+    zone_temp_heating_setpoint = 21 # [°C]
+    zone_temp_setpoint_delta = 2 # [°C]
 
     # Ventilation
     Ventilation = 15 # [CFM/PPL] Building Standard
@@ -53,7 +53,6 @@ P_Controls = 0.02 # [kW]
 P_AHU = 0 # [kW]
 P_Pumps = 0.04 # [kW]
 
-
 # Solar PV Parameters
 noct_installed = 45 # [°C] The “installed” nominal operating cell temperature. PVWatts assumes this value to be 45 C for rack-mounted arrays and 49 C for roof mount systems with restricted air flow around the module.
 module_height = 5 # [m] The height above ground of the center of the module. The PVWatts default is 5.0.
@@ -87,9 +86,9 @@ begin
     C_PCM_H_OP = 0.02 * PCM_H_Size # [$/(kWh*YR)] Operational Cost of PCM Heating Storage
     C_PCM_C_OP = 0.02 * PCM_C_Size # [$/(kWh*YR)] Operational Cost of PCM Cooling Storage
 
-    # Standard Operating Power of Heat Pump and PCM Thermal Storages 
-    HP_power_H = 1 # [kW] default constant electrical power consumption for heat pump (heating)
-    HP_power_C = 1 # [kW] default constant electrical power consumption for heat pump (cooling)
+    # Standard Operating Power of Heat Pump and PCM Thermal Storages (make this a decision variable)
+    HP_power_H = 4 # [kW] default constant electrical power consumption for heat pump (heating)
+    HP_power_C = 4 # [kW] default constant electrical power consumption for heat pump (cooling)
     
     PCM_H_discharge_rate = 2 # [kW] default constant heat discharging rate of PCM Heating Storage
     PCM_C_discharge_rate = 2 # [kW] default constant heat discharging rate of PCM Cooling Storage
