@@ -1,15 +1,15 @@
 # Input Parameters 
 
-Initial_Ti = 25 # [°C]
+Initial_Ti = 25.5 # [°C]
 Initial_PV_Gen = 0 # [kWh]
 Initial_P_0 = 0 # [kWh]
-Initial_B_SOC = 0.5
+Initial_B_SOC = 1
 Initial_Curtailment = 0 # [kWh]
 
 Inital_PCM_H_Temp = 48 # [°C]
-Inital_PCM_C_Temp = 11 # [°C]
+Inital_PCM_C_Temp = 10 # [°C]
 
-Intial_PCM_C_SOC = 0.5
+Intial_PCM_C_SOC = 1
 Intial_PCM_H_SOC = 0.5
 
 # Interior Standard
@@ -17,7 +17,7 @@ begin
     # Temperature standard
     # Temperature setpoints control the direct heating or cooling of the space through heat pump or PCM discharge.
     zone_temp_cooling_setpoint = 28 # [°C]
-    zone_temp_heating_setpoint = 21 # [°C]
+    zone_temp_heating_setpoint = 23 # [°C]
     zone_temp_setpoint_delta = 2 # [°C]
 
     # Ventilation
@@ -37,7 +37,7 @@ begin
 end
 
 # Device Capacity Parameters
-PVSize = 10; # [kW] PV DC Power Capacity
+PVSize = 5; # [kW] PV DC Power Capacity
 BatterySize = 15; # [kWh] Battery Energy Capacity
 InverterSize = 15 # [kW] Max Continuous AC Output Power
 PCM_H_Size = 11 # [kWh]

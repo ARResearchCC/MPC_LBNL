@@ -102,7 +102,7 @@ def fmu(iteration, states, commands, time_points, model):
         'Fan Coil Fan Electric Power': res['fan_coil_fan_electric_power'],
         'hot pcm not fully discharged': res['hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[1].y'],
         'cold pcm not fully discharged': res['hybrid_2024_controller_new.modular_SOC_Manager1.hysteresis[2].y'],
-        'Heat Pump Supply Water Temperature Setpoint': res['AWHP.TWatSup.T']
+        'Heat Pump Supply Water Temperature Setpoint': res['AWHP.TSupSet']
     }
 
     # This is the M_States output used for Julia at next iteration:
