@@ -171,6 +171,44 @@ function combine_dfs(df, Q_total, pv_cf, e_load)
     return df_new
 end
 
+function prepare_input_rule_based(df)
+
+    # Create an empty DataFrame
+    selected_df = DataFrame()
+
+    # Assign columns properly
+    selected_df[:, :DateTime] = df.DateTime
+    selected_df[:, :Ta] = df.Ta # [°C]
+    selected_df[:, :PV] = df.PV .* PVSize # [kW]
+    selected_df[:, :E_load] = df.Lighting + df.Plugs # [kW]
+    total_load = df.HVAC .+ df.Occupancy .+ df.Lighting .+ df.Plugs # [kW]
+    selected_df[:, :Cooling_Load] = ifelse.(total_load .> 0, total_load, 0) # [kW]
+    selected_df[:, :Heating_Load] = ifelse.(total_load .< 0, -total_load, 0) # [kW]
+
+    #=
+    # for passive operations (since Modelica does not model lighting plugs or occupancy)
+    selected_df[:, :E_load] = zeros(nrow(df))
+    selected_df[:, :Cooling_Load] = ifelse.(df.HVAC .> 0, df.HVAC, 0)
+    selected_df[:, :Heating_Load] = ifelse.(df.HVAC .< 0, -df.HVAC, 0)
+    =#
+
+    return selected_df
+end    
+
+function convert_temperatures(df)
+    df[!, "Ambient Temp"] .-= 273.15
+    df[!, "Indoor_Temp"] .-= 273.15
+    df[!, "PCM_Cold_Temp"] .-= 273.15
+    df[!, "PCM_Hot_Temp"] .-= 273.15
+    df[!, "FCU Entering Water Temperature"] .-= 273.15
+    df[!, "FCU Leaving Water Temperature"] .-= 273.15
+    df[!, "Heat Pump Supply Water Temperature"] .-= 273.15
+    df[!, "Heat Pump Return Water Temperature"] .-= 273.15
+    df[!, "Heat Pump Supply Water Temperature Setpoint"] .-= 273.15
+    return df
+end    
+
+
 function load_generation(df, format)
     new_df = DataFrame()
     new_df.DateTime = df.DateTime

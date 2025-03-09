@@ -17,6 +17,7 @@ begin
     using DataFrames
     using PlotlyJS
     using Dates
+    
     using XLSX
     using FileIO
     using Base
@@ -250,6 +251,8 @@ runtime1 = @elapsed begin
 end
 runtime[1]= runtime1; #[seconds]
 
+global predetermined_moves = [1, 0, 0, 0, 0]
+
 for i = TimeStart+1:1:NumRun
     current_runtime = @elapsed begin
         println()
@@ -270,8 +273,11 @@ for i = TimeStart+1:1:NumRun
         # println("The input data from the passive model is:")
         # println(input_data)
         # Call the MPC function
-        currentcost, new_j_states, input_schedule, didnt_solve = OptimizeV4_1(i-1, TC, steps, base_stepsize, input_data, current_m_states, current_j_states);
+        # println(current_m_states)
+        currentcost, new_j_states, input_schedule, didnt_solve, future_moves = OptimizeV5_1(i-1, TC, steps, base_stepsize, input_data, current_m_states, current_j_states, predetermined_moves);
         
+        global predetermined_moves = future_moves
+
         println("Optimization Successful!")
         println()
         println("Input schedule: ", input_schedule)

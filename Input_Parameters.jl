@@ -1,15 +1,17 @@
 # Input Parameters 
+urgency_threshold = 0.4 # 0.3 and 0.7
 
 Initial_Ti = 25.5 # [°C]
-Initial_PV_Gen = 0 # [kWh]
-Initial_P_0 = 0 # [kWh]
-Initial_B_SOC = 1
-Initial_Curtailment = 0 # [kWh]
+Initial_PV_Gen = 0 # [kW]
+Initial_P_0 = 0 # [kW]
+Initial_B_SOC = 1 # full battery to start with
+Initial_Curtailment = 0 # [kW]
+Initial_Loss_of_Load = 0 # [kW]
 
 Inital_PCM_H_Temp = 48 # [°C]
-Inital_PCM_C_Temp = 10 # [°C]
+Inital_PCM_C_Temp = 11 # [°C]
 
-Intial_PCM_C_SOC = 1
+Intial_PCM_C_SOC = 0.5
 Intial_PCM_H_SOC = 0.5
 
 # Interior Standard
@@ -37,11 +39,30 @@ begin
 end
 
 # Device Capacity Parameters
-PVSize = 5; # [kW] PV DC Power Capacity
+PVSize = 27; # [kW] PV DC Power Capacity
 BatterySize = 15; # [kWh] Battery Energy Capacity
 InverterSize = 15 # [kW] Max Continuous AC Output Power
-PCM_H_Size = 11 # [kWh]
-PCM_C_Size = 7 # [kWh]
+
+# Standard Operating Power of Heat Pump
+HP_power_H = 3 # [kW] default constant electrical power consumption for heat pump (heating)
+HP_power_C = 3 # [kW] default constant electrical power consumption for heat pump (cooling)
+
+heating_power = 3 # [kW] default heating call thermal power requirement
+cooling_power = 3 # [kW] default cooling call thermal power requirement
+
+max_heating_power = 5 # [kW] max heat pump heating capacity
+max_cooling_power = 5 # [kW] max heat pump cooling capacity
+
+# Full Capacity
+PCM_H_Size_Full = 12.135822222222222 # [kWh]
+PCM_C_Size_Full = 12.577883333333334 # [kWh]
+
+# Nominal Capacity
+PCM_H_Size = 9 # [kWh]
+PCM_C_Size = 9 # [kWh]
+
+PCM_H_Power_Capacity = 5 # [kW]
+PCM_C_Power_Capacity = 5 # [kW]
 
 # Battery parameters
 BatteryLoss = 0.00001 # [/hr] Battery Leakage Rate ??
@@ -86,10 +107,6 @@ begin
     C_PCM_H_OP = 0.02 * PCM_H_Size # [$/(kWh*YR)] Operational Cost of PCM Heating Storage
     C_PCM_C_OP = 0.02 * PCM_C_Size # [$/(kWh*YR)] Operational Cost of PCM Cooling Storage
 
-    # Standard Operating Power of Heat Pump and PCM Thermal Storages (make this a decision variable)
-    HP_power_H = 4 # [kW] default constant electrical power consumption for heat pump (heating)
-    HP_power_C = 4 # [kW] default constant electrical power consumption for heat pump (cooling)
-    
     PCM_H_discharge_rate = 2 # [kW] default constant heat discharging rate of PCM Heating Storage
     PCM_C_discharge_rate = 2 # [kW] default constant heat discharging rate of PCM Cooling Storage
 end
@@ -131,9 +148,11 @@ begin
     end
     # Daylight Saving
     begin
+        
         dls_start = DateTime(2024, 3, 10, 2)
         dls_end = DateTime(2024, 11, 3, 0)
         timezone = "America/Los_Angeles"  # Specify local timezone
+        
     end
 end
 # Environmental Parameters
