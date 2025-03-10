@@ -1,5 +1,5 @@
 # Rule Based Model Predictive Control: LBNL Simulation. Version 1.0
-# Complete Date: 03/05/2025
+# Complete Date: 03/09/2025
 # ACE Microgrid Project --- CEE Atmosphere and Energy --- Stanford University
 
 # This code is an intellectual property of Yuanbei "Fred" Fan.
@@ -141,23 +141,26 @@ begin
     # Initialize J_States: [PV_generation, E_0, InStorageBattery]
     #=
     These are the current initial conditions:
-        PV Generation at last timestep = 0 [kWh]
-        Actual House load consumption at last timestep = 0 [kWh]
-        Battery Initial SOC = 0.5
+        PV Generation = 0 [kW] initially (from 00:00 to 00:05)
+        Actual House load consumption = 0 [kW] initially (from 00:00 to 00:05)
+        Battery Initial SOC = 0.5 [kWh] at 00:00
     =#
 
     initial_j_states = DataFrame(
         "PV Generation (kW)" => [Initial_PV_Gen],
         "Lighting Plug Load (kW)" => [Initial_P_0],
-        "Remain Battery Energy (kWh)" => [Initial_B_SOC * BatterySize],
-        "Curtailment (kW)" => [Initial_Curtailment],
-        "Loss of Load (kW)"  => [Initial_Loss_of_Load]
+        "Remain Battery Energy (kWh)" => [Initial_B_SOC * BatterySize]
     )
+    
     J_States_list = [initial_j_states]
+    
+    # We do not need an initial_slack dataset, because the first iteration's slack (00:00 - 00:05) will be determined in the 00:05 - 00:10 iteration.
+
+    slack_list = []
 
     Actions = zeros(NumRun);
-    Costs_e = zeros(NumRun);
-    
+   
+    runtime = zeros(NumRun);
     Julia_Scenario = zeros(NumRun);
 
     fmu_temp = zeros(NumRun);
@@ -190,10 +193,6 @@ begin
     fmu_PCM_H_empty = zeros(NumRun);
     fmu_PCM_C_empty = zeros(NumRun);
     fmu_HP_W_Supply_Temp_SP = zeros(NumRun);
-
-    runtime = zeros(NumRun);
-    # Heat_pump_modes_j = zeros(NumRun);
-    # HP_H_Usage_j = zeros(NumRun);
 end
 
 ############ Program Execution ############
@@ -262,7 +261,7 @@ for i = TimeStart+1:1:NumRun
         # Define timepoints needed for FMU simulation
         timepoints = [Dates.value(weather.DateTime[i]-starttime)/1000, Dates.value(weather.DateTime[i+1]-starttime)/1000] # [s]
 
-        lol_e, new_j_states, input_schedule, scenario = RuleBased(i-1, input_df[i:i+f_run*120,:], current_m_states, current_j_states, previous_decision);
+        new_j_states, slack, input_schedule, scenario = RuleBased(i, input_df[i:i+f_run*120,:], current_m_states, current_j_states, previous_decision);
         
         global previous_decision = input_schedule[1]
 
@@ -275,10 +274,9 @@ for i = TimeStart+1:1:NumRun
         println("Calling FMU")
 
         # Store actions
-        Actions[i] = input_schedule[1]
-
-        # Add the lost of load from the current iteration to total lost of load (cost)
-        Costs_e[i] = lol_e; # [kW]
+        # For example, in the first time this was run, i=2. It considers the time between 00:05 - 00:10. It receives information about states at 00:05,
+        # as well as forecasted load between 00:05 - 00:10. It made a decision to do an action during 00:05 - 00:10. The action should start at 00:05.
+        Actions[i] = input_schedule[1] # this action should be the action HP-TES system executes during the current iteration.
 
         # Call the FMU function with the input (current iteration, operational commands, timepoints, FMU model)
         res = FMU.fmu(i, initialstates, input_schedule, timepoints, model)
@@ -326,9 +324,10 @@ for i = TimeStart+1:1:NumRun
         fmu_Pump2[i] = p2e(new_m_states)[7]*f_run; #[kW]
         fmu_Useful_Thermal[i]= p2e(new_m_states)[8]*f_run; #[kW]
 
-        # Save the Julia and Modelica states.
+        # Save the Julia and Modelica states, and slack.
         push!(M_States_list, new_m_states);
         push!(J_States_list, new_j_states);
+        push!(slack_list, slack);
 
         # Updates the Julia and Modelica states.
         global current_m_states = new_m_states;
@@ -337,15 +336,18 @@ for i = TimeStart+1:1:NumRun
     runtime[i] = current_runtime # [s]
 end
 
-
-pop!(Actions)
-insert!(Actions, 1, 0)
+# For actions: it means the command for the HP-TES system. The last action (made by the last actual iteration) 
+# Action executed, and action made should be separate.
+# This is action made.
+# action executed should be 1 off 
 push!(Actions, 0)
 
-insert!(Julia_Scenario, 1, 0)
+# The very first iteration has no command, therefore Julia_Scenario that controlled 00:00 - 00:05 is 0. 
+# No need to insert, as the first Julia_Scenario was overwritten at index = 2 at i=2.
+# The very last iteration has no command, therefore Julia_Scenario needs a filler value.
+push!(Julia_Scenario, 0)
 
-push!(Costs_e, 0)
-push!(Costs_q, 0)
+# The initial runtime is 0, and the runtime in last row does not exist, so a filler value of 0 is added.
 push!(runtime, 0)
 
 # These M_States are at the start of the 00:00, therefore they were inserted to index 1
@@ -396,20 +398,32 @@ Datetime_array = input_df[1:NumRun+1, "DateTime"]
 
 # Battery SOC should be solved at the extra timestep using the initial battery SOC from the very last timestep and PV and total load during the very last timestep.
 
-# Curtailment and Loss of Load are flow states from the previous iteration. They should be solved at the extra timestep to get the last timestep, and then include filler values.
+E_Modelica_final =  calculated_M_load(M_States_list[end])
+
+final_battery_soc, final_curtailment, final_lol = Get_battery_SOC(J_States_list[end][1, :"PV Generation (kW)"], E_Modelica_final, J_States_list[end][1, :"Remain Battery Energy (kWh)"]) 
 
 final_j_states = DataFrame(
     "PV Generation (kW)" => [0],
     "Lighting Plug Load (kW)" => [0],
-    "Remain Battery Energy (kWh)" => [0],
-    "Curtailment (kW)" => [0],
-    "Loss of Load (kW)"  => [0]
+    "Remain Battery Energy (kWh)" => [final_battery_soc],
 )
 
 push!(J_States_list, final_j_states)
 
+# For slacks (LOL and curtailment), they are flow states. Therefore at very last row, they need a filler value.
+# The very first iteration has no slack, therefore the initial slacks were 0, 0, but they are calculated from second iteration.
+# Before we push the filler values in, we still need to calculate the slacks of the last actual iteration.
+
+final_slacks = DataFrame(
+    "Curtailment (kW)" => [final_curtailment, 0],
+    "Loss of Load (kW)"  => [final_lol, 0]
+)
+
+push!(slack_list, final_slacks)
+
 M_df_combined = reduce(vcat, M_States_list)
 J_df_combined = reduce(vcat, J_States_list)
+slack_df_combined = reduce(vcat, slack_list)
 
 # EXPORT INTO A CSV FILE (Time series)
 
@@ -426,14 +440,13 @@ begin
     
     # Store Result Data
     begin
-        column_names = ["DateTime", "Run Time (s)", "Ti (C)", "Ta (C)", "MPC Command", "FMU Mode Received from MPC", "Julia Scenario", "FMU System Mode", "FMU FCU Mode", "FMU HP Mode", "FMU HP on/off",
+        column_names = ["DateTime", "Run Time (s)", "Ti (C)", "Ta (C)", "Julia Determined Action", "FMU Mode Received from Julia", "Julia Scenario", "FMU System Mode", "FMU FCU Mode", "FMU HP Mode", "FMU HP on/off",
         "PCM H Remaining Energy (kWh)", "PCM C Remaining Energy (kWh)", "PCM H Temp (C)", "PCM C Temp (C)", "PCM H Not Fully Discharged", "PCM C Not Fully Discharged", 
         "PCM H Ave Heat Transfer (kW)", "PCM C Ave Heat Transfer (kW)", "Useful Ave Thermal Delivered (kW)",
         "FCU Entering Water Temp", "FCU Leaving Water Temp", "Heat Pump Supply Water Temp", "Heat Pump Return Water Temp", "Heat Pump Supply Water Temp Setpoint",
         "FCU Ave Heat Power (kW)", "Fan Ave Power (kW)", "HP Ave Power (kW)", 
         "Pump 1 Ave Power (kW)", "Pump 2 Ave Power (kW)", "Heat Pump Compressor Speed", 
-        "Fan Coil Fan Ave Mass Flow (kg/s)", "Pump 1 Ave Mass Flow (kg/s)", "Pump 2 Ave Mass Flow (kg/s)", 
-        "Loss of Load (Electrical) (kW)", "Loss of Load (Thermal) (kW)"]
+        "Fan Coil Fan Ave Mass Flow (kg/s)", "Pump 1 Ave Mass Flow (kg/s)", "Pump 2 Ave Mass Flow (kg/s)"]
 
         # Collect lists into a tuple or an array
         data_lists = [Datetime_array, runtime, fmu_indoor_temp, fmu_temp, Actions, fmu_Mode_from_MPC, Julia_Scenario, fmu_system_Mode, fmu_FCU_Mode, fmu_HP_Mode, fmu_HP_ON_OFF,
@@ -442,11 +455,11 @@ begin
         fmu_FCU_W_Enter_Temp, fmu_FCU_W_Leave_Temp, fmu_HP_W_Supply_Temp, fmu_HP_W_Return_Temp, fmu_HP_W_Supply_Temp_SP,
         fmu_FCU_Heat, fmu_fan_power, fmu_HP_power,
         fmu_Pump1, fmu_Pump2, fmu_HP_Compressor_Speed, 
-        fmu_Fan_Coil_Mass_Flow, fmu_P1_Mass_Flow, fmu_P2_Mass_Flow,
-        Costs_e, Costs_q]
+        fmu_Fan_Coil_Mass_Flow, fmu_P1_Mass_Flow, fmu_P2_Mass_Flow]
         
         Discrete_Data = DataFrame(data_lists, column_names)
         Discrete_Data = hcat(Discrete_Data, J_df_combined)
+        Discrete_Data = hcat(Discrete_Data, slack_df_combined)
     end
     # Define the path for the Excel file
     excel_file_path = joinpath(folder_path, xlsx_file)

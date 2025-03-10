@@ -37,8 +37,6 @@ function RuleBased(iteration, input_df, M_States, J_States, previous_decision)
     # These two variables mean that whether the system is in heating mode or cooling mode at the start of the current iteration.
     # heating_0 = 0
     # cooling_0 = 0
-
-    time_intervals = zeros(msize-1); # [hr]
     
     heating_0 = 0
     cooling_0 = 0
@@ -50,24 +48,13 @@ function RuleBased(iteration, input_df, M_States, J_States, previous_decision)
         cooling_0 = 1
     end
 
-    for i = 1:msize-1
-        time_intervals[i] = (M_States[i+1, :"Time"] - M_States[i, :"Time"])/3600 # [hr]
-    end
-
-    E_Pump_1_0 = sum(((M_States[i+1, :"Pump 1 Electric Power"] + M_States[i, :"Pump 1 Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
-
-    E_Pump_2_0 = sum(((M_States[i+1, :"Pump 2 Electric Power"] + M_States[i, :"Pump 2 Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
-    
-    E_HP_0 = sum(((M_States[i+1, :"HP Electric Power"] + M_States[i, :"HP Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
-    
-    E_Fan_0 = sum(((M_States[i+1, :"Fan Coil Fan Electric Power"] + M_States[i, :"Fan Coil Fan Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
+    E_Modelica_0 = calculated_M_load(M_States) # [kW] Actual Electrical Load from HP system at last timestep
     
     # Julia States
     PVGen_0 = J_States[1, 1] # [kW] PV Generation during last timestep (Actual)
     E_other_0 = J_States[1, 2] # [kW] Other Electrical Load (from schedule) during last timestep (Actual)
     B_SOC_0 = J_States[1, 3] # [kWh] Battery SOC at the start of last timestep (Actual)
-    
-    E_Modelica_0 = (E_Pump_1_0 + E_Pump_2_0 + E_HP_0 + E_Fan_0)/δt # [kW] Actual Electrical Load from HP system at last timestep
+
     Total_Load_0 = E_Modelica_0 + E_other_0 # [kW] Actual total Electrical Load during last timestep
 
     T_HP = M_States[msize, :"Heat Pump Return Water Temperature"]
@@ -215,7 +202,7 @@ function RuleBased(iteration, input_df, M_States, J_States, previous_decision)
                         Decision = 0
                         Scenario = 0
                     end
-                elseif urgency_c >= 0.7 # cooling is urgent
+                elseif urgency_C >= 0.7 # cooling is urgent
                     option = "C"
                     favorable = check_favorable_COP(option, input_df, PCM_C_Energy)
                     if favorable === true # charge PCM H
@@ -439,14 +426,38 @@ function RuleBased(iteration, input_df, M_States, J_States, previous_decision)
     
     slack = DataFrame(            
                 "Curtailment (kW)" => [curtailment],
-                "Loss of Load (kW)"  => [loss_of_load]
-            )
+                "Loss of Load (kW)"  => [loss_of_load])
+
+
 
     # The J_States_new consist of PV generation of the current iteration, the electrical load of the current iteration (data from current iteration of input_df)
     # the initial battery SOC at the start of the current iteration, and the curtailment/loss of load from the last iteration (solved using last iteration's PV, actual load, and initial battery SOC)
 
-    return loss_of_load, J_States_new, slack, [Decision, Decision], Scenario
+    return J_States_new, slack, [Decision, Decision], Scenario
 end    
+
+function calculated_M_load(M_States)
+
+    # Length of the M_States dataframe
+    msize = size(M_States)[1];
+    time_intervals = zeros(msize-1); # [hr]
+
+    for i = 1:msize-1
+        time_intervals[i] = (M_States[i+1, :"Time"] - M_States[i, :"Time"])/3600 # [hr]
+    end
+
+    E_Pump_1_0 = sum(((M_States[i+1, :"Pump 1 Electric Power"] + M_States[i, :"Pump 1 Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
+
+    E_Pump_2_0 = sum(((M_States[i+1, :"Pump 2 Electric Power"] + M_States[i, :"Pump 2 Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
+    
+    E_HP_0 = sum(((M_States[i+1, :"HP Electric Power"] + M_States[i, :"HP Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
+    
+    E_Fan_0 = sum(((M_States[i+1, :"Fan Coil Fan Electric Power"] + M_States[i, :"Fan Coil Fan Electric Power"])/2)*time_intervals[i] for i = 1:(msize-1))/1000 # [kWh]
+   
+    E_Modelica_0 = (E_Pump_1_0 + E_Pump_2_0 + E_HP_0 + E_Fan_0)/δt # [kW] Actual Electrical Load from HP system at last timestep
+
+    return E_Modelica_0
+end
 
 function discharge_battery_to_HP(option1, option2, SOC, required_power, available_power, Ta, T_HP, compressor_speed)
 

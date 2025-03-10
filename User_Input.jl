@@ -24,7 +24,7 @@ Main_Folder_Path = "C:\\Users\\Fred\\Desktop\\PyFMI"
 
 TimeStart = 1;
 f_run = 12 # run frequency [times/hour]
-NumRun = 12*18 # 1 week
+NumRun = 12*24*7 # 1 week
 δt = 1/f_run # [hr]
 # NumRun = (TimeEnd-TimeStart+1) - Opt_Horizon + 1; # This is the max number of runs allowed for a full year of data
 
